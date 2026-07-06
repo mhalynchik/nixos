@@ -100,7 +100,8 @@ deepcool=$(prompt_bool "DeepCool LCD?" false)
 
 ags=$(prompt_bool "AGS widgets?" true)
 spotify=$(prompt_bool "Spotify?" true)
-telegram=$(prompt_bool "Telegram/Discord?" true)
+telegram=$(prompt_bool "Telegram (AyuGram)?" true)
+discord=$(prompt_bool "Discord?" true)
 planify=$(prompt_bool "Planify?" true)
 cursor=$(prompt_bool "Cursor editor?" true)
 vscode=$(prompt_bool "VS Code?" true)
@@ -128,6 +129,7 @@ cat > "$OUTPUT" <<EOF
     ags = $ags;
     spotify = $spotify;
     telegram = $telegram;
+    discord = $discord;
     planify = $planify;
     cursor = $cursor;
     vscode = $vscode;

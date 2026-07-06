@@ -95,6 +95,8 @@
       ++ lib.optionals vars.programs.telegram (with pkgs; [
         ayugram-desktop
         simplex-chat-desktop
+      ])
+      ++ lib.optionals vars.programs.discord (with pkgs; [
         discord
         betterdiscord-installer
       ])

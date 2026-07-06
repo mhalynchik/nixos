@@ -93,7 +93,7 @@ git pull
 
 | Флаг | Описание |
 |------|----------|
-| `ags`, `spotify`, `telegram`, `planify` | Приложения |
+| `ags`, `spotify`, `telegram`, `discord`, `planify` | Приложения |
 | `cursor`, `vscode`, `zed`, `lunarvim` | Редакторы |
 | `steam` | Steam theme module |
 

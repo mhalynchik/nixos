@@ -20,6 +20,7 @@
     ags = true;
     spotify = true;
     telegram = true;
+    discord = true;
     planify = true;
     cursor = true;
     vscode = true;

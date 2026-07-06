@@ -30,7 +30,9 @@
       configDirEnv = builtins.getEnv "NIXOS_CONFIG_DIR";
       configDir = if configDirEnv != "" then configDirEnv else builtins.toString ./.;
 
-      vars =
+      varsDefaults = import ./vars.nix.example;
+
+      varsUser =
         if builtins.pathExists ./vars.nix then import ./vars.nix
         else builtins.throw ''
           Файл vars.nix не найден в конфигурации.
@@ -41,6 +43,8 @@
           Или создайте vars.nix вручную из vars.nix.example.
           Если /etc/nixos — git repo, vars.nix должен быть закоммичен.
         '';
+
+      vars = import ./lib/merge-vars.nix varsDefaults varsUser;
 
       colors = import ./home/themes/colors.nix;
 
@@ -66,7 +70,7 @@
             home-manager.useUserPackages = true;
             home-manager.extraSpecialArgs = { inherit inputs vars colors configDir pkgs-unstable; };
             home-manager.backupFileExtension = "backup";
-            home-manager.sharedModules = [
+            home-manager.sharedModules = lib.optionals vars.programs.spotify [
               inputs.spicetify-nix.homeManagerModules.default
             ];
           }
