@@ -24,6 +24,7 @@
 
   outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, ... }@inputs:
     let
+      lib = nixpkgs.lib;
       system = "x86_64-linux";
 
       configDirEnv = builtins.getEnv "NIXOS_CONFIG_DIR";
@@ -32,15 +33,13 @@
       vars =
         if builtins.pathExists ./vars.nix then import ./vars.nix
         else builtins.throw ''
-          Файл vars.nix не найден.
+          Файл vars.nix не найден в конфигурации.
 
-          Первый запуск:
-            git clone <repo-url> ~/nixos-config
-            cd ~/nixos-config
-            ./bin/setup
+          Запустите wizard:
+            ~/nixos-config/bin/setup
 
-          Обновление:
-            ~/nixos-config/bin/update
+          Или создайте vars.nix вручную из vars.nix.example.
+          Если /etc/nixos — git repo, vars.nix должен быть закоммичен.
         '';
 
       colors = import ./home/themes/colors.nix;
@@ -54,9 +53,8 @@
         inherit system;
         config.allowUnfree = true;
       };
-    in
-    {
-      nixosConfigurations.${vars.hostname} = nixpkgs.lib.nixosSystem {
+
+      nixosSystem = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = { inherit inputs vars colors configDir pkgs-unstable; };
         modules = [
@@ -75,6 +73,15 @@
         ];
       };
 
-      nixosConfigurations.default = self.nixosConfigurations.${vars.hostname};
+      # nixos-rebuild на ISO часто запрашивает hostname "nixos", не "default"
+      nixosConfigurations = lib.recursiveUpdate {
+        default = nixosSystem;
+        ${vars.hostname} = nixosSystem;
+      } (lib.optionalAttrs (vars.hostname != "nixos") {
+        nixos = nixosSystem;
+      });
+    in
+    {
+      inherit nixosConfigurations;
     };
 }

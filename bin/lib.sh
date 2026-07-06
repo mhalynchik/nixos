@@ -1,9 +1,27 @@
 #!/usr/bin/env bash
 
 # Flake в git-репо видит только закоммиченные файлы.
+ensure_target_git() {
+  local target="${1:?}"
+  if [[ -d "$target/.git" ]]; then
+    return 0
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    echo "Предупреждение: git не найден, vars.nix может быть невидим для flake" >&2
+    return 0
+  fi
+  echo "Инициализация git в $target (нужно для flake)"
+  git -C "$target" init -b main
+  if [[ ! -f "$target/.gitignore" && -f "$target/hosts/gitignore.local.example" ]]; then
+    cp "$target/hosts/gitignore.local.example" "$target/.gitignore"
+  fi
+}
+
 commit_local_config_in_git() {
   local target="${1:?}"
   local message="${2:-config: wizard update}"
+
+  ensure_target_git "$target"
 
   if [[ ! -d "$target/.git" ]]; then
     return 0
@@ -47,4 +65,10 @@ commit_message_after_deploy() {
   else
     echo "deploy: sync from source"
   fi
+}
+
+rebuild_flake() {
+  local target="${1:?}"
+  local action="${2:?}"
+  sudo nixos-rebuild "$action" --flake "$target#default" --impure
 }

@@ -40,5 +40,5 @@ commit_local_config_in_git "$TARGET" "$(commit_message_after_deploy "$TARGET")"
 
 echo
 echo "=== Rebuild ==="
-sudo nixos-rebuild switch --flake "$TARGET#" --impure
+rebuild_flake "$TARGET" switch
 echo "Готово."

@@ -52,12 +52,12 @@ commit_local_config_in_git "$TARGET" "$(commit_message_after_deploy "$TARGET")"
 
 echo
 echo "=== Проверка сборки ==="
-sudo nixos-rebuild build --flake "$TARGET#" --impure
+rebuild_flake "$TARGET" build
 
 echo
 read -r -p "Применить конфигурацию (switch)? [y/N]: " apply
 if [[ "$apply" =~ ^[Yy]$ ]]; then
-  sudo nixos-rebuild switch --flake "$TARGET#" --impure
+  rebuild_flake "$TARGET" switch
 fi
 
 echo "Готово. Обновление: $SOURCE/bin/update"

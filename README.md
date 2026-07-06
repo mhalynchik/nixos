@@ -22,7 +22,7 @@
 - `~/nixos-config` — общий конфиг, синхронизация с GitHub, `vars.nix` в `.gitignore`
 - `/etc/nixos` — рабочая копия на машине, может иметь **локальный git** для своих коммитов
 
-**Flake и vars.nix:** если `/etc/nixos` — git repo, flake видит только **закоммиченные** файлы. Wizard после setup/update делает `git add` + `git commit` (включая `vars.nix`, `hardware-configuration.nix` и файлы после deploy). В GitHub они не попадают — remote только у `~/nixos-config`.
+**Flake и vars.nix:** если `/etc/nixos` — git repo, flake видит только **закоммиченные** файлы. Wizard инициализирует git в `/etc/nixos` (если нет), затем `git add` + `git commit`. В GitHub секреты не попадают — remote только у `~/nixos-config`.
 
 ## Первый запуск
 
@@ -118,8 +118,10 @@ docs/           playwright, multi-monitor, max-sandbox-vm
 ## Rebuild вручную
 
 ```bash
-sudo nixos-rebuild switch --flake /etc/nixos# --impure
+sudo nixos-rebuild switch --flake /etc/nixos#default --impure
 ```
+
+`#default` — явный attr flake. На ISO hostname часто `nixos`, поэтому flake также экспортирует `nixosConfigurations.nixos`.
 
 `--impure` нужен для модуля Cursor (AppImage из `~/.local/opt/cursor/`).
 
