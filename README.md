@@ -26,18 +26,33 @@
 
 ## Первый запуск
 
+### Уже установленный NixOS (rebuild)
+
 ```bash
 git clone https://github.com/mhalynchik/nix-config.git ~/nixos-config
 cd ~/nixos-config
 ./bin/setup
+# Выбор: 2) Rebuild
+```
+
+### Установка с ISO (live)
+
+См. [docs/install-iso.md](docs/install-iso.md). Кратко:
+
+```bash
+# разметка + mount /mnt
+git clone https://github.com/mhalynchik/nix-config.git ~/nixos-config
+cd ~/nixos-config
+./bin/setup
+# Выбор: 1) Установка с ISO → nixos-install
 ```
 
 Wizard:
-1. Синхронизирует конфиг в `/etc/nixos`
+1. Deploy конфига в `/etc/nixos` или `/mnt/etc/nixos`
 2. Создаёт `vars.nix` (интерактивно)
-3. Генерирует `hardware-configuration.nix` (если нет)
-4. Коммитит изменения в `/etc/nixos`
-5. Собирает и предлагает `switch`
+3. Генерирует `hardware-configuration.nix`
+4. Коммитит изменения
+5. **Rebuild:** `nixos-rebuild switch` или **ISO:** `nixos-install`
 
 ## Обновление
 
@@ -127,7 +142,7 @@ sudo nixos-rebuild switch --flake /etc/nixos#default --impure
 
 ## Документация
 
-- [Мультимонитор](docs/multi-monitor.md)
+- [Установка с ISO](docs/install-iso.md)
 - [Playwright на NixOS](docs/playwright.md)
 - [MAX sandbox VM](docs/max-sandbox-vm.md)
 - [Windows bootable USB](docs/windows-bootable-usb.md)

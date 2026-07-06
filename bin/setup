@@ -2,7 +2,6 @@
 set -euo pipefail
 
 SOURCE="${NIXOS_CONFIG_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-TARGET="${NIXOS_CONFIG_TARGET:-/etc/nixos}"
 REPO_URL="${NIXOS_CONFIG_REPO:-}"
 
 echo "=== NixOS Config Setup ==="
@@ -24,6 +23,19 @@ fi
 chmod +x "$SOURCE"/bin/*.sh 2>/dev/null || true
 # shellcheck source=lib.sh
 source "$SOURCE/bin/lib.sh"
+
+SETUP_MODE=$(prompt_setup_mode)
+
+if [[ "$SETUP_MODE" == "install" ]]; then
+  hint_install_iso
+  TARGET="/mnt/etc/nixos"
+  export NIXOS_CONFIG_TARGET="$TARGET"
+  sudo mkdir -p "$TARGET"
+  sudo chown "$(id -un):$(id -gn)" "$TARGET"
+else
+  TARGET="${NIXOS_CONFIG_TARGET:-/etc/nixos}"
+fi
+
 "$SOURCE/bin/deploy.sh"
 
 if [[ ! -f "$TARGET/vars.nix" ]]; then
@@ -37,7 +49,9 @@ fi
 if [[ ! -f "$TARGET/hardware-configuration.nix" ]]; then
   echo
   echo "=== Генерация hardware-configuration.nix ==="
-  if [[ -f /etc/nixos/hardware-configuration.nix && "$TARGET" != "/etc/nixos" ]]; then
+  if [[ "$SETUP_MODE" == "install" ]]; then
+    sudo nixos-generate-config --root /mnt --show-hardware-config > "$TARGET/hardware-configuration.nix"
+  elif [[ -f /etc/nixos/hardware-configuration.nix && "$TARGET" != "/etc/nixos" ]]; then
     sudo cp /etc/nixos/hardware-configuration.nix "$TARGET/hardware-configuration.nix"
   else
     sudo nixos-generate-config --show-hardware-config > "$TARGET/hardware-configuration.nix" || {
@@ -50,14 +64,28 @@ fi
 
 commit_local_config_in_git "$TARGET" "$(commit_message_after_deploy "$TARGET")"
 
-echo
-echo "=== Проверка сборки ==="
-rebuild_flake "$TARGET" build
+if [[ "$SETUP_MODE" == "install" ]]; then
+  echo
+  echo "=== Установка на диск ==="
+  echo "Совет: на ISO включите минимальные флаги в vars.nix (gaming, docker, nvidia = false)."
+  read -r -p "Запустить nixos-install? [y/N]: " do_install
+  if [[ "${do_install:-N}" =~ ^[Yy]$ ]]; then
+    install_flake "$TARGET"
+    echo "Готово. Перезагрузитесь и снимите флешку: sudo reboot"
+  else
+    echo "Установка пропущена. Вручную:"
+    echo "  sudo nixos-install --flake $TARGET#default --impure"
+  fi
+else
+  echo
+  echo "=== Проверка сборки ==="
+  rebuild_flake "$TARGET" build
 
-echo
-read -r -p "Применить конфигурацию (switch)? [y/N]: " apply
-if [[ "$apply" =~ ^[Yy]$ ]]; then
-  rebuild_flake "$TARGET" switch
+  echo
+  read -r -p "Применить конфигурацию (switch)? [y/N]: " apply
+  if [[ "$apply" =~ ^[Yy]$ ]]; then
+    rebuild_flake "$TARGET" switch
+  fi
+
+  echo "Готово. Обновление: $SOURCE/bin/update"
 fi
-
-echo "Готово. Обновление: $SOURCE/bin/update"
