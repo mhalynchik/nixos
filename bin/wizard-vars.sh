@@ -15,18 +15,6 @@ prompt() {
   echo "${value:-$default_value}"
 }
 
-prompt_secret() {
-  local prompt_text="$1"
-  local value
-  read -r -s -p "$prompt_text (Enter = null): " value
-  echo
-  if [[ -z "$value" ]]; then
-    echo "null"
-  else
-    echo "\"$value\""
-  fi
-}
-
 prompt_bool() {
   local prompt_text="$1"
   local default_value="$2"
@@ -37,6 +25,45 @@ prompt_bool() {
   else
     echo "false"
   fi
+}
+
+hash_password() {
+  local password="$1"
+  if command -v mkpasswd >/dev/null 2>&1; then
+    mkpasswd -m sha-512 "$password"
+    return 0
+  fi
+  if command -v openssl >/dev/null 2>&1; then
+    openssl passwd -6 "$password"
+    return 0
+  fi
+  if command -v nix >/dev/null 2>&1; then
+    nix shell nixpkgs#mkpasswd -c mkpasswd -m sha-512 "$password" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
+prompt_password_hash() {
+  local pass pass2 hash
+  read -r -s -p "Пароль пользователя (Enter = задать позже через passwd): " pass
+  echo
+  if [[ -z "$pass" ]]; then
+    echo "null"
+    return 0
+  fi
+  read -r -s -p "Повторите пароль: " pass2
+  echo
+  if [[ "$pass" != "$pass2" ]]; then
+    echo "Ошибка: пароли не совпадают" >&2
+    exit 1
+  fi
+  if ! hash="$(hash_password "$pass")"; then
+    echo "Не найден mkpasswd/openssl/nix. hashedPassword = null." >&2
+    echo "После первого входа: sudo passwd $username" >&2
+    echo "null"
+    return 0
+  fi
+  echo "\"$hash\""
 }
 
 if [[ ! -f "$EXAMPLE" ]]; then
@@ -55,7 +82,7 @@ terminal=$(prompt terminal "Терминал (kitty)" "kitty")
 monitor=$(prompt monitor "Монитор Hyprland" ",preferred,auto,1")
 gitUsername=$(prompt gitUsername "Git имя" "Your Name")
 gitEmail=$(prompt gitEmail "Git email" "you@example.com")
-hashedPassword=$(prompt_secret "Password hash (mkpasswd -m sha-512)")
+hashedPassword=$(prompt_password_hash)
 
 lat=$(prompt lat "Широта для redshift" "55.75")
 lon=$(prompt lon "Долгота для redshift" "37.62")
