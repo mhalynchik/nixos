@@ -27,7 +27,7 @@
 ## Первый запуск
 
 ```bash
-git clone https://github.com/mhalynchik/nix-config.git ~/nixos-config
+git clone https://github.com/mhalynchik/nixos.git ~/nixos-config
 cd ~/nixos-config
 ./bin/setup
 ```
