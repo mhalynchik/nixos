@@ -36,7 +36,7 @@ if [[ -f "$TARGET/hardware-configuration.nix" ]]; then
   fi
 fi
 
-track_local_config_in_git "$TARGET"
+commit_local_config_in_git "$TARGET" "$(commit_message_after_deploy "$TARGET")"
 
 echo
 echo "=== Rebuild ==="

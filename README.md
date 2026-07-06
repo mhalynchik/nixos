@@ -22,12 +22,12 @@
 - `~/nixos-config` — общий конфиг, синхронизация с GitHub, `vars.nix` в `.gitignore`
 - `/etc/nixos` — рабочая копия на машине, может иметь **локальный git** для своих коммитов
 
-**Flake и vars.nix:** если `/etc/nixos` — git repo, flake видит только **tracked** файлы. Wizard после setup/update делает `git add vars.nix hardware-configuration.nix`. В удалённый репозиторий они не попадают — remote только у `~/nixos-config`.
+**Flake и vars.nix:** если `/etc/nixos` — git repo, flake видит только **закоммиченные** файлы. Wizard после setup/update делает `git add` + `git commit` (включая `vars.nix`, `hardware-configuration.nix` и файлы после deploy). В GitHub они не попадают — remote только у `~/nixos-config`.
 
 ## Первый запуск
 
 ```bash
-git clone https://github.com/YOUR_USER/nixos-config ~/nixos-config
+git clone https://github.com/mhalynchik/nix-config.git ~/nixos-config
 cd ~/nixos-config
 ./bin/setup
 ```
@@ -36,7 +36,8 @@ Wizard:
 1. Синхронизирует конфиг в `/etc/nixos`
 2. Создаёт `vars.nix` (интерактивно)
 3. Генерирует `hardware-configuration.nix` (если нет)
-4. Собирает и предлагает `switch`
+4. Коммитит изменения в `/etc/nixos`
+5. Собирает и предлагает `switch`
 
 ## Обновление
 
@@ -56,7 +57,8 @@ git pull
 `bin/update` **не делает** `git pull`. Только:
 1. Deploy source → `/etc/nixos`
 2. Спрашивает про `vars.nix` (оставить / merge / пересоздать)
-3. `nixos-rebuild switch`
+3. Коммитит изменения в `/etc/nixos`
+4. `nixos-rebuild switch`
 
 Можно менять `vars.nix` и модули локально и запускать `update` без pull.
 
@@ -133,6 +135,6 @@ sudo nixos-rebuild switch --flake /etc/nixos# --impure
 1. Скопировать repo: `cp -a /etc/nixos ~/nixos-config`
 2. В `~/nixos-config`: настроить remote на GitHub, убедиться что `vars.nix` в `.gitignore`
 3. `./bin/deploy.sh` — синхронизирует в `/etc/nixos`, **не трогает** `.git` в `/etc/nixos`
-4. Локально в `/etc/nixos`: `git add vars.nix hardware-configuration.nix` (делает wizard автоматически)
+4. Локально в `/etc/nixos`: wizard коммитит `vars.nix`, `hardware-configuration.nix` и deploy-изменения
 
 Локальный git в `/etc/nixos` остаётся для своих коммитов. Remote — только у `~/nixos-config`.
