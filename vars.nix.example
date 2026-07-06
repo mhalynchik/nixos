@@ -1,0 +1,60 @@
+{
+  # === Флаги системных модулей ===
+  features = {
+    docker = false;
+    k8s = false;
+    gaming = false;
+    nvidia = false;
+    vpn = false;
+    deepcool = false;
+    maxSandbox = false;
+    maxBypassVpn = false;
+    openWebui = false;
+    devTools = true;
+    flatpak = true;
+    sshPasswordAuth = false;
+  };
+
+  # === Флаги home programs ===
+  programs = {
+    ags = true;
+    spotify = true;
+    telegram = true;
+    planify = true;
+    cursor = true;
+    vscode = true;
+    zed = false;
+    lunarvim = false;
+    steam = false;
+  };
+
+  theme = "catppuccin";
+  username = "CHANGE_ME";
+  homeDirectory = "/home/CHANGE_ME";
+  gitUsername = "Your Name";
+  gitEmail = "you@example.com";
+  hostname = "nixos";
+  timezone = "Europe/Moscow";
+  locale = "ru_RU.UTF-8";
+  supportedLocales = [ "ru_RU.UTF-8/UTF-8" "en_US.UTF-8/UTF-8" ];
+  hashedPassword = null;
+  monitor = ",preferred,auto,1";
+  additionalMonitors = [ ];
+  workspaceMonitorBindings = [ ];
+  terminal = "kitty";
+  browser = "floorp";
+  kbLayouts = "us, ru";
+  kbOptions = "grp:win_space_toggle";
+  animatedWallpapersDir = "Pictures/animated";
+  staticWallpapersDir = "Pictures/static";
+  defaultWallpaper = "default.jpg";
+  stateVersion = "25.05";
+  agsPopupTimeout = 3;
+  deepcoolScript = null;
+  location = { latitude = 55.75; longitude = 37.62; };
+  vpn = {
+    openvpnConfigs = [ ];
+    wireguardConfigs = [ ];
+  };
+  gamemodeGpuDevice = 0;
+}

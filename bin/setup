@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${NIXOS_CONFIG_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+TARGET="${NIXOS_CONFIG_TARGET:-/etc/nixos}"
+REPO_URL="${NIXOS_CONFIG_REPO:-}"
+
+echo "=== NixOS Config Setup ==="
+
+if [[ "$(id -u)" -ne 0 ]] && ! sudo -n true 2>/dev/null; then
+  echo "Для deploy и rebuild потребуется sudo"
+fi
+
+if [[ -n "$REPO_URL" && ! -d "$SOURCE/.git" ]]; then
+  echo "Клонирование $REPO_URL -> $SOURCE"
+  git clone "$REPO_URL" "$SOURCE"
+fi
+
+if [[ ! -f "$SOURCE/flake.nix" ]]; then
+  echo "Ошибка: flake.nix не найден в $SOURCE" >&2
+  exit 1
+fi
+
+chmod +x "$SOURCE"/bin/*.sh 2>/dev/null || true
+# shellcheck source=lib.sh
+source "$SOURCE/bin/lib.sh"
+"$SOURCE/bin/deploy.sh"
+
+if [[ ! -f "$TARGET/vars.nix" ]]; then
+  echo
+  echo "=== Настройка vars.nix ==="
+  "$SOURCE/bin/wizard-vars.sh" "$TARGET/vars.nix"
+else
+  echo "vars.nix уже существует: $TARGET/vars.nix"
+fi
+
+if [[ ! -f "$TARGET/hardware-configuration.nix" ]]; then
+  echo
+  echo "=== Генерация hardware-configuration.nix ==="
+  if [[ -f /etc/nixos/hardware-configuration.nix && "$TARGET" != "/etc/nixos" ]]; then
+    sudo cp /etc/nixos/hardware-configuration.nix "$TARGET/hardware-configuration.nix"
+  else
+    sudo nixos-generate-config --show-hardware-config > "$TARGET/hardware-configuration.nix" || {
+      echo "Запустите: sudo nixos-generate-config --root $TARGET"
+    }
+  fi
+else
+  echo "hardware-configuration.nix уже существует"
+fi
+
+track_local_config_in_git "$TARGET"
+
+echo
+echo "=== Проверка сборки ==="
+sudo nixos-rebuild build --flake "$TARGET#" --impure
+
+echo
+read -r -p "Применить конфигурацию (switch)? [y/N]: " apply
+if [[ "$apply" =~ ^[Yy]$ ]]; then
+  sudo nixos-rebuild switch --flake "$TARGET#" --impure
+fi
+
+echo "Готово. Обновление: $SOURCE/bin/update"

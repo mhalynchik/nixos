@@ -1,0 +1,12 @@
+result
+result-*
+.deploy-version
+*.drv
+*~
+*.swp
+*.swo
+*.backup
+.DS_Store
+.idea/
+.vscode/
+*.code-workspace

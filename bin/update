@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${NIXOS_CONFIG_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+TARGET="${NIXOS_CONFIG_TARGET:-/etc/nixos}"
+
+echo "=== NixOS Config Update ==="
+
+chmod +x "$SOURCE"/bin/*.sh 2>/dev/null || true
+# shellcheck source=lib.sh
+source "$SOURCE/bin/lib.sh"
+"$SOURCE/bin/deploy.sh"
+
+if [[ -f "$TARGET/vars.nix" ]]; then
+  echo
+  echo "vars.nix найден. Действия:"
+  echo "  1) Оставить как есть (default)"
+  echo "  2) Merge новых ключей из example"
+  echo "  3) Пересоздать через wizard"
+  read -r -p "Выбор [1]: " vars_choice
+  case "${vars_choice:-1}" in
+    2) "$SOURCE/bin/merge-vars.sh" ;;
+    3)
+      read -r -p "Перезаписать vars.nix? [y/N]: " confirm
+      if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        "$SOURCE/bin/wizard-vars.sh" "$TARGET/vars.nix"
+      fi
+      ;;
+  esac
+fi
+
+if [[ -f "$TARGET/hardware-configuration.nix" ]]; then
+  read -r -p "Перегенерировать hardware-configuration.nix? [y/N]: " hw_choice
+  if [[ "${hw_choice:-N}" =~ ^[Yy]$ ]]; then
+    sudo nixos-generate-config --show-hardware-config > "$TARGET/hardware-configuration.nix"
+  fi
+fi
+
+track_local_config_in_git "$TARGET"
+
+echo
+echo "=== Rebuild ==="
+sudo nixos-rebuild switch --flake "$TARGET#" --impure
+echo "Готово."
