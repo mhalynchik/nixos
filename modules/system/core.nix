@@ -22,7 +22,7 @@
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelModules = [ "i2c-dev" "i2c-piix4" "bluetooth" "btusb" ];
   boot.extraModprobeConfig = ''
-    options bluetooth disable_ertm=1 disable_esco=1
+    options bluetooth disable_ertm=1
     options btusb enable_autosuspend=0
   '';
 

@@ -18,7 +18,7 @@
         DiscoverableTimeout = 0;
         PairableTimeout = 0;
         FastConnectable = true;
-        MultiProfile = "off";
+        MultiProfile = "multiple";
       };
       Policy.AutoEnable = true;
     };
