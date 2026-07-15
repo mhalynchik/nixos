@@ -49,7 +49,7 @@
 
   users.users.${vars.username} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "input" "networkmanager" "bluetooth" ];
+    extraGroups = [ "wheel" "input" "networkmanager" "bluetooth" "video" ];
     packages = with pkgs; [ tree ];
   } // lib.optionalAttrs (vars.hashedPassword != null) {
     hashedPassword = vars.hashedPassword;

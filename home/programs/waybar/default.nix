@@ -3,32 +3,38 @@
 let
   wb = colors.waybar;
   rgba = colors.toRgba;
+  c = colors.colors;
 
-  # Audio visualizer script
+  agsClick = cmd: if vars.programs.ags then cmd else null;
+  optionalClick = cmd: lib.optionalAttrs (cmd != null) { on-click = cmd; };
+
+  audioClick = if vars.programs.ags then "ags -t audio-popup" else "pavucontrol";
+  btClick = if vars.programs.ags then "ags -t bluetooth-popup" else "blueman-manager";
+  netClick = if vars.programs.ags then "ags -t network-popup" else "nm-connection-editor";
+  # With AGS the click opens the stats popup; without it fall back to btop in a
+  # terminal so the module stays useful instead of being a dead button.
+  statsClick = if vars.programs.ags then "ags -t system-stats-popup" else "${vars.terminal} -e btop";
+  clockClick = agsClick "ags -t calendar-popup";
+  langClick = if vars.programs.ags then "ags -t keyboard-popup" else "hyprctl switchxkblayout all next";
+
   audio-visualizer = pkgs.writeShellScriptBin "audio-visualizer" ''
     #!/usr/bin/env bash
-
     config_file="/tmp/cava_waybar_config"
-
     cat > "$config_file" << 'EOF'
     [general]
     bars = 12
     framerate = 60
     sensitivity = 100
-
     [input]
     method = pipewire
     source = auto
-
     [output]
     method = raw
     raw_target = /dev/stdout
     data_format = ascii
     ascii_max_range = 7
     EOF
-
     chars=(' ' '▂' '▃' '▄' '▅' '▆' '▇' '█')
-
     ${pkgs.cava}/bin/cava -p "$config_file" 2>/dev/null | while IFS=';' read -r -a values; do
       output=""
       for value in "''${values[@]}"; do
@@ -43,223 +49,107 @@ let
 in
 {
   home-manager.users.${vars.username} = {
-    home.packages = [ audio-visualizer ];
+    home.packages = [ audio-visualizer ] ++ lib.optional (!vars.programs.ags) pkgs.btop;
 
     programs.waybar = {
       enable = true;
       systemd = {
-        enable = false;
+        enable = true;
         target = "graphical-session.target";
       };
+
       style = ''
         * {
           font-family: "JetBrainsMono Nerd Font";
-          font-size: 12pt;
+          font-size: 14px;
           font-weight: bold;
-          border-radius: 8px;
-          transition-property: background-color;
-          transition-duration: 0.5s;
+          border: none;
+          border-radius: 0;
         }
 
-        @keyframes blink_red {
-          to {
-            background-color: ${colors.colors.error};
-            color: ${colors.colors.base};
-          }
+        window#waybar {
+          background: transparent;
         }
 
-        .warning, .critical, .urgent {
-          animation-name: blink_red;
-          animation-duration: 1s;
-          animation-timing-function: linear;
-          animation-iteration-count: infinite;
-          animation-direction: alternate;
+        #left, #center, #right {
+          background-color: ${rgba c.base 0.7};
+          border-radius: 14px;
+          border: 1px solid ${rgba c.accent 0.3};
+          padding: 4px 10px;
+          margin: 2px 6px;
         }
-
-        window#waybar { background-color: transparent; }
-
-        window > box {
-          margin-left: 5px;
-          margin-right: 5px;
-          margin-top: 5px;
-          background-color: ${rgba colors.colors.base 0.65};
-          padding: 3px;
-          padding-left: 8px;
-          border: 2px solid ${rgba colors.colors.accent 0.3};
-          border-radius: 12px;
-        }
-
-        #workspaces { padding-left: 0px; padding-right: 4px; }
 
         #workspaces button {
-          padding-top: 5px;
-          padding-bottom: 5px;
-          padding-left: 6px;
-          padding-right: 6px;
-          margin-right: 4px;
-          border-radius: 8px;
-          color: ${colors.colors.accent};
+          margin: 2px;
+          padding: 0 12px;
+          border-radius: 10px;
+          font-size: 18px;
+          color: ${c.subtext0};
           background-color: transparent;
-          font-weight: bold;
+          transition: all 0.15s ease-out;
         }
 
         #workspaces button.active {
-          background-color: ${rgba colors.colors.accent 0.2};
-          color: ${colors.colors.accentAlt};
-          border-bottom: 2px solid ${colors.colors.accentAlt};
-          border-radius: 8px 8px 4px 4px;
+          background: ${wb.workspaceActive};
+          color: ${c.crust};
         }
 
         #workspaces button.urgent {
-          background-color: ${rgba colors.colors.error 0.3};
-          color: ${colors.colors.error};
-          animation: blink_red 0.5s ease infinite alternate;
+          background: ${wb.workspaceUrgent};
         }
 
-        #workspaces button:hover {
-          background-color: ${rgba colors.colors.accent 0.25};
-          color: ${colors.colors.text};
+        #workspaces button:hover:not(.active) {
+          background: ${wb.workspaceHover};
+        }
+
+        #window {
+          color: ${c.text};
+          padding: 0 8px;
         }
 
         tooltip {
-          background: ${colors.colors.surface1};
-          border: 1px solid ${rgba colors.colors.accent 0.5};
-          border-radius: 8px;
+          background: ${c.surface1};
+          border: 1px solid ${rgba c.accent 0.3};
+          border-radius: 14px;
         }
 
-        tooltip label { color: ${colors.colors.text}; }
+        tooltip label { color: ${c.text}; }
 
-        #custom-launcher {
-          font-size: 20px;
-          padding-left: 8px;
-          padding-right: 6px;
-          color: ${wb.launcher};
-        }
-
-        #custom-launcher:hover { color: ${colors.colors.accent}; }
-
-        #clock {
-          color: ${wb.clock};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #clock:hover { background-color: ${rgba colors.colors.accent 0.15}; }
-
-        #custom-stats {
-          color: ${wb.stats};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #custom-stats:hover { background-color: ${rgba colors.colors.accent 0.15}; }
-
-        #pulseaudio {
-          color: ${wb.audio};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #pulseaudio:hover { background-color: ${rgba colors.colors.accent 0.15}; }
-        #pulseaudio.muted { color: ${colors.colors.overlay0}; }
-
-        #custom-bluetooth {
-          color: ${wb.bluetooth};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #custom-bluetooth:hover { background-color: ${rgba colors.colors.accent 0.15}; }
-
-        #custom-network {
-          color: ${wb.network};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #custom-network:hover { background-color: ${rgba colors.colors.accent 0.15}; }
-
-        #custom-keyboard {
-          color: ${wb.keyboard};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #custom-keyboard:hover { background-color: ${rgba colors.colors.accent 0.15}; }
-
-        #battery {
-          color: ${wb.battery};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
+        #custom-launcher { color: ${wb.launcher}; font-size: 16px; padding: 0 6px; }
+        #clock { color: ${wb.clock}; padding: 0 8px; }
+        #custom-stats { color: ${wb.stats}; padding: 0 8px; }
+        #pulseaudio { color: ${wb.audio}; padding: 0 8px; }
+        #pulseaudio.muted { color: ${c.overlay0}; }
+        #bluetooth { color: ${wb.bluetooth}; padding: 0 8px; }
+        #bluetooth.off, #bluetooth.disabled { color: ${c.overlay0}; }
+        #network { color: ${wb.network}; padding: 0 8px; }
+        #network.disconnected { color: ${c.overlay0}; }
+        #language { color: ${wb.keyboard}; padding: 0 8px; }
+        #battery { color: ${wb.battery}; padding: 0 8px; }
         #battery.charging { color: ${wb.batteryCharging}; }
         #battery.warning:not(.charging) { color: ${wb.batteryWarning}; }
         #battery.critical:not(.charging) { color: ${wb.batteryCritical}; }
-
-        #custom-powermenu {
-          color: ${wb.powerMenu};
-          padding-left: 10px;
-          padding-right: 8px;
-        }
-
-        #custom-powermenu:hover {
-          color: ${colors.colors.error};
-          background-color: ${rgba colors.colors.error 0.15};
-        }
-
-        #tray {
-          padding-right: 8px;
-          padding-left: 10px;
-        }
-
-        #tray > .passive { -gtk-icon-effect: dim; }
-        #tray > .needs-attention { -gtk-icon-effect: highlight; }
-
-        #idle_inhibitor {
-          color: ${colors.colors.mauve};
-          padding-left: 10px;
-          padding-right: 10px;
-        }
-
-        #idle_inhibitor.activated { color: ${colors.colors.warning}; }
-
-        #custom-visualizer {
-          color: ${wb.visualizer};
-          font-family: "monospace";
-          font-size: 10pt;
-          padding-left: 6px;
-          padding-right: 6px;
-          min-width: 60px;
-        }
+        #custom-powermenu { color: ${wb.powerMenu}; padding: 0 8px; }
+        #idle_inhibitor { color: ${c.mauve}; padding: 0 8px; }
+        #idle_inhibitor.activated { color: ${c.warning}; }
+        #custom-visualizer { color: ${wb.visualizer}; font-size: 10px; min-width: 48px; }
+        #tray { padding: 0 6px; }
+        #custom-gamemode { padding: 0 8px; }
+        #custom-gamemode.on { color: ${c.red}; }
+        #custom-gamemode.off { color: ${c.subtext0}; }
       '';
 
       settings = [{
         layer = "top";
         position = "top";
-        height = 35;
-        spacing = 4;
+        height = 40;
+        spacing = 0;
 
-        # Multi-monitor: show bar on all monitors
-        # Each monitor gets its own waybar instance
-        # Workspaces module shows only workspaces on current monitor
         "hyprland/workspaces" = {
-          all-outputs = false;  # Show only workspaces from current monitor
-          format = "{icon}";
+          all-outputs = false;
+          format = "{name}";
           format-icons = {
-            "1" = "󰲠";
-            "2" = "󰲢";
-            "3" = "󰲤";
-            "4" = "󰲦";
-            "5" = "󰲨";
-            "6" = "󰲪";
-            "7" = "󰲬";
-            "8" = "󰲮";
-            "9" = "󰲰";
-            "10" = "󰿬";
-            urgent = "";
-            active = "";
-            default = "";
+            urgent = "!"; active = ""; default = "";
           };
           on-click = "activate";
           sort-by-number = true;
@@ -267,32 +157,46 @@ in
 
         "hyprland/window" = {
           format = "{}";
-          max-length = 40;
+          max-length = 35;
           separate-outputs = true;
         };
 
-        modules-left = [
-          "custom/launcher"
-          "hyprland/workspaces"
-          "hyprland/window"
-          "custom/visualizer"
-        ];
+        "hyprland/language" = {
+          format = "{}";
+          format-en = "EN";
+          format-ru = "RU";
+          on-click = langClick;
+          on-click-right = "hyprctl switchxkblayout all next";
+          tooltip-format = "Keyboard\nClick: menu/switch\nRight-click: switch";
+        };
 
-        modules-center = [
-          "clock"
-        ];
+        modules-left = [ "group/left" ];
+        modules-center = [ "group/center" ];
+        modules-right = [ "group/right" ];
 
-        modules-right = [
-          "idle_inhibitor"
-          "custom/stats"
-          "pulseaudio"
-          "custom/bluetooth"
-          "custom/network"
-          "custom/keyboard"
-          "battery"
-          "custom/powermenu"
-          # "tray"
-        ];
+        "group/left" = {
+          orientation = "inherit";
+          modules = [
+            "custom/launcher"
+            "hyprland/workspaces"
+            "hyprland/window"
+            "custom/visualizer"
+          ];
+        };
+
+        "group/center" = {
+          orientation = "inherit";
+          modules = [ "clock" ];
+        };
+
+        "group/right" = {
+          orientation = "inherit";
+          modules = lib.flatten [
+            [ "idle_inhibitor" "custom/stats" "pulseaudio" "bluetooth" "network" "hyprland/language" ]
+            (lib.optional vars.features.gaming "custom/gamemode")
+            [ "battery" "tray" "custom/powermenu" ]
+          ];
+        };
 
         "custom/launcher" = {
           format = "󰀻";
@@ -304,87 +208,73 @@ in
 
         "idle_inhibitor" = {
           format = "{icon}";
-          format-icons = {
-            activated = "󰅶";
-            deactivated = "󰾪";
-          };
+          format-icons = { activated = "󰅶"; deactivated = "󰾪"; };
           tooltip-format-activated = "Idle inhibitor: ON";
           tooltip-format-deactivated = "Idle inhibitor: OFF";
         };
 
-        # System stats - opens AGS popup
         "custom/stats" = {
           format = "󰍛";
-          on-click = "ags -t system-stats-popup";
           tooltip = true;
           tooltip-format = "System Monitor";
-        };
+        } // optionalClick statsClick;
 
-        # Volume - opens AGS audio popup
         "pulseaudio" = {
           scroll-step = 5;
           format = "{icon}";
           format-muted = "󰖁";
           format-icons = {
+            default = [ "󰕿" "󰖀" "󰕾" ];
             headphone = "󰋋";
             hands-free = "󰋎";
             headset = "󰋎";
-            phone = "";
-            portable = "";
-            car = "";
-            default = [ "󰕿" "󰖀" "󰕾" ];
           };
-          on-click = "ags -t audio-popup";
-          on-click-right = "pamixer -t";
-          on-scroll-up = "pamixer -i 5";
-          on-scroll-down = "pamixer -d 5";
+          on-click = audioClick;
+          on-click-right = "swayosd-client --output-volume mute-toggle";
+          on-scroll-up = "swayosd-client --output-volume raise";
+          on-scroll-down = "swayosd-client --output-volume lower";
           tooltip = true;
           tooltip-format = "{desc}: {volume}%";
         };
 
-        # Bluetooth - opens AGS popup
-        "custom/bluetooth" = {
+        # Native module: reflects the real adapter/connection state.
+        "bluetooth" = {
           format = "󰂯";
-          on-click = "ags -t bluetooth-popup";
+          format-disabled = "󰂲";
+          format-off = "󰂲";
+          format-on = "󰂯";
+          format-connected = "󰂱 {num_connections}";
+          on-click = btClick;
           tooltip = true;
-          tooltip-format = "Bluetooth";
+          tooltip-format = "{controller_alias}\n{status}";
+          tooltip-format-connected = "{controller_alias}\n{num_connections} connected\n{device_enumerate}";
+          tooltip-format-enumerate-connected = "{device_alias}";
         };
 
-        # Network - opens AGS popup (replaced native network module)
-        "custom/network" = {
-          format = "󰖩";
-          on-click = "ags -t network-popup";
+        # Native module: reflects the real network state.
+        "network" = {
+          format-wifi = "󰤨";
+          format-ethernet = "󰈀";
+          format-linked = "󰈀";
+          format-disconnected = "󰤮";
+          on-click = netClick;
           tooltip = true;
-          tooltip-format = "Network";
+          tooltip-format = "{ifname} {ipaddr}";
+          tooltip-format-wifi = "{essid} ({signalStrength}%)\n{ipaddr}";
+          tooltip-format-ethernet = "{ifname}\n{ipaddr}";
+          tooltip-format-disconnected = "Disconnected";
         };
 
-        # Keyboard layout - opens AGS popup
-        "custom/keyboard" = {
-          format = "{}";
-          exec = "hyprctl devices -j | jq -r '.keyboards[] | select(.main == true) | .active_keymap' | head -1 | sed 's/.*Russian.*/RU/; s/.*English.*/EN/'";
-          interval = 1;
-          on-click = "ags -t keyboard-popup";
-          on-click-right = "hyprctl switchxkblayout all next";
-          tooltip = true;
-          tooltip-format = "Keyboard Layout\nClick: menu\nRight-click: switch";
-        };
-
-        # Clock - opens AGS calendar popup
         "clock" = {
           interval = 1;
           format = "󰥔 {:%H:%M}";
           format-alt = "󰃭 {:%d.%m.%Y}";
-          on-click = "ags -t calendar-popup";
           tooltip = true;
           tooltip-format = "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>";
-        };
+        } // optionalClick clockClick;
 
         "battery" = {
-          states = {
-            good = 95;
-            warning = 30;
-            critical = 15;
-          };
+          states = { good = 95; warning = 30; critical = 15; };
           format = "{icon}";
           format-charging = "󰂄";
           format-plugged = "󰂄";
@@ -410,6 +300,20 @@ in
           exec = "audio-visualizer";
           tooltip = false;
           restart-interval = 5;
+        };
+
+        "custom/gamemode" = lib.mkIf vars.features.gaming {
+          format = "{icon}";
+          exec = "gaming-mode status";
+          interval = 5;
+          signal = 8;
+          format-icons = {
+            on = "󰊛";
+            off = "󰊝";
+          };
+          on-click = "gaming-mode toggle";
+          tooltip = true;
+          tooltip-format = "Gaming profile";
         };
       }];
     };

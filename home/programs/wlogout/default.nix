@@ -68,7 +68,7 @@ in
           background-repeat: no-repeat;
           background-position: center;
           background-size: 25%;
-          border-radius: 16px;
+          border-radius: 14px;
           margin: 10px;
           transition: all 0.3s ease;
         }

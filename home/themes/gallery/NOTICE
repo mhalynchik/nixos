@@ -1,0 +1,74 @@
+HyDE Gallery curated theme assets
+=================================
+
+This directory integrates ONE pinned HyDE Gallery theme declaratively. The
+theme is fetched as a flake input pinned by commit (see flake.nix input
+`hyde-theme-catppuccin-mocha`). Only allowlisted color fields are parsed; no
+theme scripts (*.theme, *.dcol, justfile, theme.patch.sh, wallbash) are sourced
+or executed, and nothing is written to ~/.config/hyde.
+
+This is NOT full HyDE Gallery support. See "Compatibility scope" below.
+
+Theme: Catppuccin Mocha (HyDE Gallery)
+--------------------------------------
+- Source repository: https://github.com/HyDE-Project/hyde-themes
+- Branch:            Catppuccin-Mocha
+- Pinned commit:     415d22a6bb6348a6d09c11307be54c592fb15138
+- Upstream author:   Prasanth Rangan (HyDE-Project), forked theme collection
+- License:           LICENSE NOT PROVIDED / UNVERIFIED.
+                     The pinned commit contains NO LICENSE/COPYING file in the
+                     theme branch. The license of these assets is therefore
+                     unverified. Do NOT assume it is GPL-3.0 merely because the
+                     main HyDE project is GPL-3.0 licensed.
+- Adapter reads:     Configs/.config/hyde/themes/Catppuccin Mocha/kitty.theme
+                     (allowlisted color keys only)
+
+Bundled third-party archives (unpacked into read-only Nix derivations)
+----------------------------------------------------------------------
+The archives below were verified to NOT contain any LICENSE/COPYING file at the
+pinned commit (the only "license*.svg" entries in the icon archive are icon
+graphics, not license documents). Their licenses are therefore UNVERIFIED from
+the pinned artifact. Filenames suggest a probable upstream, listed only as an
+unverified hint, NOT as a license claim:
+
+1. Source/Gtk_CatppuccinMocha.tar.gz
+   - Extracted folder:  Catppuccin-Mocha
+   - Probable upstream (UNVERIFIED): https://github.com/catppuccin/gtk
+   - License:           UNVERIFIED (no LICENSE in the pinned archive)
+
+2. Source/Icon_TelaDracula.tar.gz
+   - Extracted folder:  Tela-circle-dracula
+   - Probable upstream (UNVERIFIED): https://github.com/vinceliuice/Tela-circle-icon-theme
+   - License:           UNVERIFIED (no LICENSE in the pinned archive)
+
+Color palette provenance
+------------------------
+The parsed kitty.theme carries its own header text claiming:
+   Catppuccin Mocha, author Pocco81 (https://github.com/Pocco81),
+   upstream https://github.com/catppuccin/kitty, License MIT.
+This is the file's self-declaration; it was not independently verified against a
+signed upstream release.
+
+Wallpapers
+----------
+Configs/.config/hyde/themes/Catppuccin Mocha/wallpapers/* are provided as
+read-only store assets and attached to the existing wallpaper domain search
+path. They are NOT copied into $HOME. NO license is claimed for these
+wallpapers: their authorship and licensing are unverified. Do not redistribute
+without independently confirming their license.
+
+Update procedure
+----------------
+1. git ls-remote https://github.com/HyDE-Project/hyde-themes refs/heads/Catppuccin-Mocha
+2. Update the rev in flake.nix input `hyde-theme-catppuccin-mocha`.
+3. nix flake lock --update-input hyde-theme-catppuccin-mocha
+4. Re-verify archive folder names AND re-check for any LICENSE files; update
+   this NOTICE (do not upgrade "UNVERIFIED" to a concrete license without a
+   verifiable source in the pinned artifact).
+
+Compatibility scope
+-------------------
+Supported here: this single curated, declarative palette + assets adapter.
+NOT supported: hydectl theme switching, hyde-shell, wallbash runtime color
+extraction, theme.patch.sh, and any mutable GTK/Qt patching. Theme switching is
+done by changing vars.theme and rebuilding.

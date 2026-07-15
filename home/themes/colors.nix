@@ -1,21 +1,30 @@
 # Centralized color scheme and transparency settings
-# Theme selection is based on vars.theme
+# Theme selection is based on vars.theme (merged vars from flake.nix)
 # This file provides consistent theming across all applications
 
+# galleryGtkThemeName: GTK theme folder name of the active curated Gallery theme
+# ("" for builtin themes). Kept here so system modules (desktop, flatpak) consume
+# the theme decision through this public API instead of importing the Gallery
+# domain directly.
+{ vars, galleryPalettes ? { }, galleryGtkThemeName ? "", galleryIconThemeName ? "" }:
+
 let
-  # Import theme palettes
-  palettes = {
+  # Builtin palettes (hand-authored, always available).
+  builtinPalettes = {
     catppuccin = import ./palettes/catppuccin.nix;
     crimson = import ./palettes/crimson.nix;
   };
 
-  # Import vars using relative path (works from any location)
-  # colors.nix is at: <config>/home/themes/colors.nix
-  # vars.nix is at:   <config>/vars.nix
-  vars = import ../../vars.nix;
+  # Builtin + curated Gallery adapters share one vars.theme selector namespace.
+  palettes = builtinPalettes // galleryPalettes;
+  supportedThemes = builtins.attrNames palettes;
 
-  # Select active palette based on vars.theme
-  activePalette = palettes.${vars.theme} or palettes.catppuccin;
+  # Select active palette based on vars.theme. No silent fallback: an unknown
+  # theme aborts evaluation with the list of supported selectors.
+  activePalette = palettes.${vars.theme} or (builtins.throw ''
+    Unknown vars.theme = "${vars.theme}".
+    Supported themes: ${builtins.concatStringsSep ", " supportedThemes}
+  '');
 
   # Helper: convert hex char to int
   hexCharToInt = c:
@@ -33,10 +42,19 @@ let
       c1 = builtins.substring 0 1 s;
       c2 = builtins.substring 1 1 s;
     in (hexCharToInt c1) * 16 + (hexCharToInt c2);
+  # True when a curated Gallery theme is active (public flag for consumers that
+  # must not import the Gallery domain, e.g. system modules).
+  galleryActive = galleryGtkThemeName != "";
 in
 {
   # Re-export the active palette
   inherit (activePalette) name displayName base16 colors hyprland waybar;
+
+  inherit galleryActive;
+
+  # Effective system GTK_THEME value. Builtin themes keep "Adwaita:dark"
+  # byte-for-byte; a Gallery theme selects its own GTK theme folder name.
+  gtkThemeEnv = if galleryActive then galleryGtkThemeName else "Adwaita:dark";
 
   # Transparency settings (shared across themes)
   transparency = {
@@ -80,7 +98,11 @@ in
 
   # GTK/Qt theme names
   gtkTheme = "Adwaita-dark";
-  iconTheme = "Papirus-Dark";
+  # Single source of truth for the icon theme folder name so every consumer
+  # (GTK apps, Waybar tray, nwg-dock, Rofi) resolves the same icon set. A
+  # Gallery theme supplies its own icon theme; builtin themes use Papirus-Dark.
+  iconThemeName = if galleryIconThemeName != "" then galleryIconThemeName else "Papirus-Dark";
+  iconTheme = if galleryIconThemeName != "" then galleryIconThemeName else "Papirus-Dark";
   cursorTheme = "Bibata-Modern-Classic";
 
   # Font settings (shared)

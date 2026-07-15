@@ -1,9 +1,9 @@
-{ config, lib, pkgs, pkgs-unstable, vars, ... }:
+{ config, lib, pkgs, pkgs-unstable, vars, configDir, ... }:
 
 {
   imports =
     (import ./lib/mkEnabledModules.nix { inherit vars lib; })
     ++ [
-      ./hardware-configuration.nix
+      "${configDir}/hardware-configuration.nix"
     ];
 }

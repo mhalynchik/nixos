@@ -1,0 +1,26 @@
+HyDE vendored data files
+========================
+
+Source repository: https://github.com/HyDE-Project/HyDE
+Source commit: be97b8b4db232bfffc9b74fd27ba90a3457b9354
+License: GNU General Public License v3.0 (see LICENSE.GPL-3.0)
+
+Files vendored:
+- emoji.db  <- Configs/.local/share/hyde/emoji.db
+- glyph.db  <- Configs/.local/share/hyde/glyph.db
+- websearch.lst <- Configs/.local/share/hyde/websearch.lst
+
+glyph.db provenance (verified before vendoring):
+- Origin: HyDE-Project/HyDE repository, path Configs/.local/share/hyde/glyph.db
+- Same commit as above (be97b8b4db232bfffc9b74fd27ba90a3457b9354)
+- License: GPL-3.0 as part of the HyDE project (no separate license header in file)
+- No third-party glyph data with alternate licensing identified in upstream tree at vendoring time
+
+Update procedure:
+1. Check out pinned commit from HyDE-Project/HyDE
+2. Copy files from Configs/.local/share/hyde/ to home/programs/rofi/data/
+3. Re-verify glyph.db provenance if upstream changes
+4. Update commit hash in this NOTICE
+
+Implication: This repository now includes GPL-3.0 licensed data files.
+Combined work must comply with GPL-3.0 for these files.

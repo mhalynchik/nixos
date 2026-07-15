@@ -1,4 +1,4 @@
-{ config, lib, pkgs, vars, ... }:
+{ config, lib, pkgs, vars, colors, ... }:
 
 {
   services.greetd.enable = true;
@@ -22,12 +22,15 @@
     NIXOS_OZONE_WL = "1";
     GDK_BACKEND = "wayland,x11";
     TRACKER_DB_HOME = "/dev/null";
-    GTK_THEME = "Adwaita:dark";
     QT_QPA_PLATFORM = "wayland;xcb";
     QT_WAYLAND_DISABLE_WINDOWDECORATION = "1";
     XDG_CURRENT_DESKTOP = "Hyprland";
     XDG_SESSION_TYPE = "wayland";
     XDG_SESSION_DESKTOP = "Hyprland";
+  } // lib.optionalAttrs colors.galleryActive {
+    # Gallery GTK theme name for apps that read GTK_THEME from the environment.
+    # Builtin themes rely on Home Manager gtk.theme (Stylix), not this override.
+    GTK_THEME = colors.gtkThemeEnv;
   };
 
   services.gnome.at-spi2-core.enable = true;

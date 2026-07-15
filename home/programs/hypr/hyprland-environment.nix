@@ -1,10 +1,10 @@
-{ config, pkgs, ... }:
+{ config, pkgs, browser, ... }:
 
 {
   home = {
     sessionVariables = {
     EDITOR = "lvim";
-    BROWSER = "librewolf";
+    BROWSER = browser.bin;
     TERMINAL = "kitty";
     GBM_BACKEND= "nvidia-drm";
     __GLX_VENDOR_LIBRARY_NAME= "nvidia";

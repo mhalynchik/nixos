@@ -1,5 +1,11 @@
 { config, pkgs, lib, vars, colors, ... }:
 
+let
+  # When a curated Gallery theme is active, its GTK theme is selected explicitly
+  # in home/themes/default.nix, so the Stylix HM GTK target must yield to avoid
+  # a conflicting gtk.theme definition. Builtin themes keep Stylix GTK enabled.
+  galleryActive = colors.galleryActive;
+in
 {
   # Stylix - System-wide automatic theming
   # Theme selection is based on vars.theme in vars.nix
@@ -119,8 +125,8 @@
       bat.enable = true;
       spicetify.enable = false;  # We have custom spicetify theme
 
-      # GTK
-      gtk.enable = true;
+      # GTK (disabled for Gallery themes: gtk.theme is set explicitly there)
+      gtk.enable = !galleryActive;
 
       # Qt
       qt.enable = true;

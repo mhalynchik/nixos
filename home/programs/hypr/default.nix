@@ -1,97 +1,77 @@
-{ config, lib, pkgs, vars, colors, ... }:
+{ config, lib, pkgs, vars, colors, browser, inputs, ... }:
 
 let
   rgba = colors.toRgba;
-  
-  # Script to set random animated/video wallpaper using mpvpaper
-  wallpaper-animated = pkgs.writeShellScriptBin "wallpaper-animated" ''
-  WALLPAPER_DIR="${vars.homeDirectory}/${vars.animatedWallpapersDir}"
 
-  if [ -d "$WALLPAPER_DIR" ] && [ "$(ls -A "$WALLPAPER_DIR" 2>/dev/null)" ]; then
-    WALLPAPER=$(find "$WALLPAPER_DIR" -type f \( -name "*.gif" -o -name "*.mp4" -o -name "*.webm" -o -name "*.mkv" \) 2>/dev/null | shuf -n 1)
+  # Wallpaper domain bridge only: curated Gallery wallpapers as a read-only
+  # store dir. GTK/icon asset selection lives in the themes domain
+  # (home/themes/default.nix), not here.
+  galleryThemes = import ../../themes/gallery { inherit lib inputs; };
+  galleryWallpaperDir = galleryThemes.wallpaperDirFor vars.theme;
 
-    if [ -n "$WALLPAPER" ]; then
-      # Аккуратно убиваем старый mpvpaper
-      ${pkgs.procps}/bin/pkill -f mpvpaper 2>/dev/null || true
-      sleep 0.5
+  keybinds = import ./keybinds.nix { inherit lib vars; };
+  wallpaper = import ./wallpaper.nix { inherit pkgs vars galleryWallpaperDir; };
+  gaming = import ./gaming-mode.nix { inherit pkgs vars lib; };
 
-      # Опции mpv для живых обоев
-      MPV_OPTS="no-audio loop \
-        --hwdec=no \
-        --no-cache \
-        --profile=low-latency \
-        --vd-lavc-threads=1 \
-        --video-sync=display-resample \
-        --no-config"
+  cheatsheetFile = pkgs.writeText "hypr-cheatsheet.txt" keybinds.cheatsheetText;
+  cheatsheet = pkgs.writeShellApplication {
+    name = "cheatsheet";
+    runtimeInputs = with pkgs; [ rofi-wayland coreutils ];
+    text = ''
+      rofi -dmenu -i -p "Keybinds" < ${cheatsheetFile} || true
+    '';
+  };
 
-      ${pkgs.mpvpaper}/bin/mpvpaper -o "$MPV_OPTS" '*' "$WALLPAPER" &
-
-      ${pkgs.libnotify}/bin/notify-send \
-        "Animated Wallpaper" "$(basename "$WALLPAPER")" -t 2000
-    fi
-  fi
-  '';
-
-  # Script to set random static wallpaper using swww
-  wallpaper-static = pkgs.writeShellScriptBin "wallpaper-static" ''
-    WALLPAPER_DIR="${vars.homeDirectory}/${vars.staticWallpapersDir}"
-
-    # Kill mpvpaper if running (switch back to static)
-    pkill -x mpvpaper 2>/dev/null
-
-    # Ensure swww is initialized
-    ${pkgs.swww}/bin/swww init 2>/dev/null || true
-
-    if [ -d "$WALLPAPER_DIR" ] && [ "$(ls -A "$WALLPAPER_DIR" 2>/dev/null)" ]; then
-      WALLPAPER=$(find "$WALLPAPER_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" -o -name "*.gif" \) 2>/dev/null | shuf -n 1)
-      if [ -n "$WALLPAPER" ]; then
-        ${pkgs.swww}/bin/swww img "$WALLPAPER" --transition-type random --transition-fps 60 --transition-duration 2
-        ${pkgs.libnotify}/bin/notify-send "Static Wallpaper" "$(basename "$WALLPAPER")" -t 2000
+  # Waybar show/hide toggle. Uses SIGUSR1 (Waybar's built-in visibility toggle)
+  # instead of stopping the systemd unit, so rapid presses never trip the
+  # systemd start-limit (which previously left Waybar dead and unresponsive).
+  waybar-toggle = pkgs.writeShellApplication {
+    name = "waybar-toggle";
+    runtimeInputs = with pkgs; [ systemd ];
+    text = ''
+      set -euo pipefail
+      if systemctl --user is-active --quiet waybar.service; then
+        systemctl --user kill -s SIGUSR1 waybar.service
+      else
+        systemctl --user reset-failed waybar.service 2>/dev/null || true
+        systemctl --user start waybar.service
       fi
-    fi
-  '';
+    '';
+  };
 
-  # Script to cycle wallpapers - static only (for compatibility)
-  wallpaper-next = pkgs.writeShellScriptBin "wallpaper-next" ''
-    STATIC_DIR="${vars.homeDirectory}/${vars.staticWallpapersDir}"
+  # Full restart of the Waybar unit. reset-failed first so repeated presses do
+  # not hit the systemd start-limit and leave the unit in a failed state.
+  waybar-restart = pkgs.writeShellApplication {
+    name = "waybar-restart";
+    runtimeInputs = with pkgs; [ systemd ];
+    text = ''
+      set -euo pipefail
+      systemctl --user reset-failed waybar.service 2>/dev/null || true
+      systemctl --user restart waybar.service
+    '';
+  };
 
-    # Kill mpvpaper if running
-    pkill -x mpvpaper 2>/dev/null
-
-    # Ensure swww is initialized (needed when animated wallpaper was used at startup)
-    ${pkgs.swww}/bin/swww init 2>/dev/null || true
-
-    # Get only static images
-    ALL_WALLPAPERS=$(find "$STATIC_DIR" -type f \( -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.webp" -o -name "*.gif" \) 2>/dev/null)
-
-    if [ -n "$ALL_WALLPAPERS" ]; then
-      WALLPAPER=$(echo "$ALL_WALLPAPERS" | shuf -n 1)
-      ${pkgs.swww}/bin/swww img "$WALLPAPER" --transition-type random --transition-fps 60 --transition-duration 2
-      ${pkgs.libnotify}/bin/notify-send "Wallpaper" "$(basename "$WALLPAPER")" -t 2000
-    else
-      ${pkgs.libnotify}/bin/notify-send "Wallpaper" "No images in $STATIC_DIR (add jpg/png/webp/gif)" -t 3000 -u critical
-    fi
-  '';
-
-  # Waybar watcher script
-  waybar-watcher = pkgs.writeShellScriptBin "waybar-watcher" ''
-    while true; do
-      ${pkgs.waybar}/bin/waybar &
-      WAYBAR_PID=$!
-      ${pkgs.inotify-tools}/bin/inotifywait -e modify ~/.config/waybar/config ~/.config/waybar/style.css 2>/dev/null
-      kill $WAYBAR_PID 2>/dev/null
-      sleep 0.5
-    done
-  '';
-
-  # Waybar toggle script
-  waybar-toggle = pkgs.writeShellScriptBin "waybar-toggle" ''
-    if pgrep -x "waybar" > /dev/null; then
-      pkill waybar
-    else
-      ${pkgs.waybar}/bin/waybar &
-    fi
-  '';
+  # Scratchpad round-trip: send active window to special:magic or return it to the
+  # focused monitor's active workspace (movetoworkspacesilent, no workspace switch).
+  scratchpad-toggle = pkgs.writeShellApplication {
+    name = "scratchpad-toggle";
+    runtimeInputs = with pkgs; [ hyprland jq coreutils ];
+    text = ''
+      set -euo pipefail
+      win=$(hyprctl activewindow -j)
+      addr=$(printf '%s' "$win" | jq -r '.address // empty')
+      if [ -z "$addr" ] || [ "$addr" = "null" ]; then
+        exit 0
+      fi
+      ws=$(printf '%s' "$win" | jq -r '.workspace.name // empty')
+      if [ "$ws" = "special:magic" ]; then
+        target=$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .activeWorkspace.id')
+        hyprctl dispatch movetoworkspacesilent "$target,address:$addr"
+      else
+        hyprctl dispatch movetoworkspacesilent "special:magic,address:$addr"
+      fi
+    '';
+  };
 
   # Opacity control scripts - using temp files to track per-window opacity
   opacity-increase = pkgs.writeShellScriptBin "opacity-increase" ''
@@ -200,14 +180,16 @@ let
     done
   '';
 in
-{
+if keybinds.collisionError != null then throw keybinds.collisionError else {
   home-manager.users.${vars.username} = {
     imports = [
       ./hyprland-environment.nix
     ];
 
+    # sd-switch restarts user units when X-Restart-Triggers change (waybar, swaync, ags).
+    systemd.user.startServices = true;
+
     home.packages = with pkgs; [
-      waybar
       swww
       mpvpaper        # Video wallpapers
       hyprpaper
@@ -215,7 +197,6 @@ in
       hypridle        # Idle daemon
       hyprlock        # Lock screen
       wlogout         # Logout menu
-      inotify-tools   # For waybar watcher
       libnotify       # For notifications
 
       # Desktop icons/launchers
@@ -227,21 +208,17 @@ in
       procps          # pkill command
       socat           # For dock-watcher (Hyprland socket)
 
-      # Custom wallpaper scripts
-      wallpaper-animated
-      wallpaper-static
-      wallpaper-next
-      waybar-watcher
       waybar-toggle
-
-      # Opacity control scripts
+      waybar-restart
+      scratchpad-toggle
       opacity-increase
       opacity-decrease
       opacity-reset
-
-      # Dock watcher script
       dock-watcher
-    ];
+
+      cheatsheet
+    ] ++ wallpaper.packages
+      ++ lib.optional vars.features.gaming gaming.package;
 
     wayland.windowManager.hyprland = {
       enable = true;
@@ -258,7 +235,7 @@ in
 
         # Variables
         "$terminal" = vars.terminal;
-        "$browser" = vars.browser;
+        "$browser" = browser.bin;
         "$menu" = "rofi -show drun -show-icons";
         "$fileManager" = "thunar";
         "$mainMod" = "SUPER";
@@ -266,7 +243,6 @@ in
         # Environment variables
         env = [
             "XCURSOR_SIZE,24"
-            "QT_QPA_PLATFORMTHEME,qt5ct"
             "GDK_BACKEND,wayland,x11"
             "QT_QPA_PLATFORM,wayland;xcb"
             # SDL с fallback на x11 для игр через Proton
@@ -279,29 +255,20 @@ in
             "DISPLAY,:0"
         ];
 
-        # Autostart applications
-        exec-once = [
+        # Autostart applications (waybar, swaync, ags are systemd user services).
+        exec-once =
+          [
             "hyprctl setcursor Bibata-Modern-Classic 24"
-            # Разрешить доступ к XWayland для локальных подключений (критично для Steam/Proton)
             "xhost +local:"
             "swww-daemon"
-            "swaync"
-            "floorp"
+            browser.bin
             "nm-applet"
             "udiskie"
             "blueman-applet"
-            "waybar-watcher"
-            # AGS widgets daemon (if enabled in vars.nix)
-            "ags"
-            # Dock panel (resident mode, follows active output for multi-monitor)
-            # -f = follow active output (multi-monitor support)
-            # -r = resident mode (always running)
-            "nwg-dock-hyprland -r -f -i 48 -mb 8 -ml 8 -mr 8"
-            # Dock watcher - shows dock only on empty workspaces
+            "nwg-dock-hyprland -r -i 48 -mb 8"
             "dock-watcher"
-            # Set animated wallpaper on startup (fallback to static if no animated found)
-            "sleep 1 && wallpaper-animated || wallpaper-static"
-        ];
+            "sleep 1 && wallpaper-startup"
+          ];
 
         # Input configuration
         input = {
@@ -316,8 +283,8 @@ in
 
         # General settings - using dynamic theme colors
         general = {
-          gaps_in = 5;
-          gaps_out = 15;
+          gaps_in = 4;
+          gaps_out = 12;
           border_size = 2;
           "col.active_border" = colors.hyprland.activeBorder;
           "col.inactive_border" = colors.hyprland.inactiveBorder;
@@ -325,28 +292,26 @@ in
           allow_tearing = false;
         };
 
-        # Decoration
         decoration = {
-          rounding = 12;
+          rounding = 14;
           blur = {
             enabled = true;
-            size = 10;
+            size = 8;
             passes = 3;
             new_optimizations = true;
             ignore_opacity = true;
             noise = 0.01;
             contrast = 0.9;
-            brightness = 0.8;
+            brightness = 0.85;
           };
           shadow = {
             enabled = true;
-            range = 12;
-            render_power = 3;
+            range = 10;
+            render_power = 2;
             color = colors.hyprland.shadow;
           };
         };
 
-        # Animations
         animations = {
           enabled = true;
           bezier = [
@@ -363,7 +328,7 @@ in
             "borderangle,1,8,default"
             "fade,1,3,smoothIn"
             "fadeDim,1,3,smoothIn"
-            "workspaces,1,5,overshot,slidevert"
+            "workspaces,1,4,overshot,slidevert"
           ];
         };
 
@@ -480,145 +445,21 @@ in
           # - VS Code: install "Custom CSS and JS Loader" extension
         ];
 
-        # Key bindings
-        bind = [
-          # Applications
-          "$mainMod, Return, exec, $terminal"
-          "$mainMod, C, exec, $terminal"
-          "$mainMod, E, exec, $fileManager"
-          "$mainMod, L, exec, $browser"
-          "$mainMod, R, exec, $menu"
-          "$mainMod, W, exec, rofi -show drun -show-icons"
-          "$mainMod, G, exec, rofi -modi games -show games -show-icons -theme games"
-          "$mainMod, A, exec, nwg-drawer"  # Full-screen app drawer
-
-          # Window management
-          "$mainMod, Q, killactive,"
-          "$mainMod, V, togglefloating,"
-          "$mainMod, F, fullscreen, 1"
-          "$mainMod, P, pseudo,"
-          "$mainMod, J, togglesplit,"
-          "$mainMod, M, exit,"
-
-          # Screenshots
-          "$mainMod, F12, exec, grim -g \"$(slurp)\" - | wl-copy"
-          ", Print, exec, grim -g \"$(slurp)\" - | wl-copy"
-          "SHIFT, Print, exec, grim -g \"$(slurp)\" ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"
-          "$mainMod SHIFT, S, exec, grim -g \"$(slurp)\" - | swappy -f -"
-
-          # Waybar toggle
-          "$mainMod, B, exec, waybar-toggle"
-          "$mainMod SHIFT, B, exec, pkill waybar"
-
-          # Wallpaper controls
-          "$mainMod SHIFT, W, exec, wallpaper-next"
-          "$mainMod ALT, W, exec, wallpaper-animated"
-
-          # Color picker
-          "$mainMod SHIFT, C, exec, hyprpicker -a"
-
-          # Opacity controls (for active window)
-          "$mainMod ALT, equal, exec, opacity-increase"
-          "$mainMod ALT, minus, exec, opacity-decrease"
-          "$mainMod ALT, 0, exec, opacity-reset"
-
-          # Lock screen
-          "$mainMod SHIFT, L, exec, hyprlock"
-
-          # Clipboard history
-          "$mainMod SHIFT, V, exec, cliphist list | rofi -dmenu | cliphist decode | wl-copy"
-
-          # Notification center (SwayNC)
-          "$mainMod, N, exec, swaync-client -t -sw"
-          "$mainMod SHIFT, N, exec, swaync-client -d -sw"
-
-          # Focus movement
-          "$mainMod, left, movefocus, l"
-          "$mainMod, right, movefocus, r"
-          "$mainMod, up, movefocus, u"
-          "$mainMod, down, movefocus, d"
-
-          # Window cycling
-          "$mainMod, Tab, cyclenext,"
-          "$mainMod, Tab, bringactivetotop,"
-
-          # Workspace switching
-          "$mainMod, 1, workspace, 1"
-          "$mainMod, 2, workspace, 2"
-          "$mainMod, 3, workspace, 3"
-          "$mainMod, 4, workspace, 4"
-          "$mainMod, 5, workspace, 5"
-          "$mainMod, 6, workspace, 6"
-          "$mainMod, 7, workspace, 7"
-          "$mainMod, 8, workspace, 8"
-          "$mainMod, 9, workspace, 9"
-          "$mainMod, 0, workspace, 10"
-
-          # Move windows to workspaces
-          "$mainMod SHIFT, 1, movetoworkspace, 1"
-          "$mainMod SHIFT, 2, movetoworkspace, 2"
-          "$mainMod SHIFT, 3, movetoworkspace, 3"
-          "$mainMod SHIFT, 4, movetoworkspace, 4"
-          "$mainMod SHIFT, 5, movetoworkspace, 5"
-          "$mainMod SHIFT, 6, movetoworkspace, 6"
-          "$mainMod SHIFT, 7, movetoworkspace, 7"
-          "$mainMod SHIFT, 8, movetoworkspace, 8"
-          "$mainMod SHIFT, 9, movetoworkspace, 9"
-          "$mainMod SHIFT, 0, movetoworkspace, 10"
-
-          # Scroll through workspaces
-          "$mainMod, mouse_down, workspace, e+1"
-          "$mainMod, mouse_up, workspace, e-1"
-
-          # Special workspace (scratchpad)
-          "$mainMod, S, togglespecialworkspace, magic"
-          "$mainMod SHIFT, S, movetoworkspace, special:magic"
-
-          # Multi-monitor controls
-          # Focus monitor by direction
-          "$mainMod CTRL, left, focusmonitor, l"
-          "$mainMod CTRL, right, focusmonitor, r"
-          "$mainMod CTRL, up, focusmonitor, u"
-          "$mainMod CTRL, down, focusmonitor, d"
-
-          # Move window to monitor by direction
-          "$mainMod CTRL SHIFT, left, movewindow, mon:l"
-          "$mainMod CTRL SHIFT, right, movewindow, mon:r"
-          "$mainMod CTRL SHIFT, up, movewindow, mon:u"
-          "$mainMod CTRL SHIFT, down, movewindow, mon:d"
-
-          # Swap workspaces between monitors
-          "$mainMod CTRL ALT, left, swapactiveworkspaces, current -1"
-          "$mainMod CTRL ALT, right, swapactiveworkspaces, current +1"
-        ];
-
-        # Repeatable binds
-        binde = [
-          # Volume control
-          ", XF86AudioRaiseVolume, exec, pamixer -i 5"
-          ", XF86AudioLowerVolume, exec, pamixer -d 5"
-          ", XF86AudioMute, exec, pamixer -t"
-          ", XF86AudioMicMute, exec, pamixer --default-source -t"
-
-          # Brightness control
-          ", XF86MonBrightnessUp, exec, brightnessctl s +10%"
-          ", XF86MonBrightnessDown, exec, brightnessctl s 10%-"
-
-          # Media control
-          ", XF86AudioPlay, exec, playerctl play-pause"
-          ", XF86AudioPause, exec, playerctl play-pause"
-          ", XF86AudioNext, exec, playerctl next"
-          ", XF86AudioPrev, exec, playerctl previous"
-        ];
-
-        # Mouse bindings
-        bindm = [
-          "$mainMod, mouse:272, movewindow"
-          "$mainMod, mouse:273, resizewindow"
-          "ALT, mouse:272, resizewindow"
-        ];
+        bind = keybinds.bind;
+        binde = keybinds.binde;
+        bindl = keybinds.bindl;
+        bindel = keybinds.bindel;
+        bindr = keybinds.bindr;
+        bindrl = keybinds.bindrl;
+        bindm = keybinds.bindm;
       };
     };
+
+    home.activation.initWallpaperSymlinks = wallpaper.initWallpaperSymlinksScript;
+
+    # Animated wallpaper is a single systemd-managed mpvpaper instance recycled
+    # every 45 min to bound RSS growth (see wallpaper.nix / README).
+    systemd.user.services.animated-wallpaper = wallpaper.animatedWallpaperService;
 
     # Hyprlock configuration - using dynamic theme colors
     # Multi-monitor: empty monitor = applies to all monitors
@@ -637,7 +478,7 @@ in
       # Background on all monitors (empty monitor = all)
       background {
         monitor =
-        path = ${vars.homeDirectory}/${vars.staticWallpapersDir}/${vars.defaultWallpaper}
+        path = ${wallpaper.lockSymlink}
         blur_passes = 4
         blur_size = 8
         noise = 0.02
@@ -677,30 +518,42 @@ in
         monitor =
         text = Hi, ${vars.username} 
         color = rgba(${toRgb colors.colors.accent}, 1.0)
-        font_size = 16
-        font_family = JetBrainsMono Nerd Font
-        position = 0, -60
+        font_size = 18
+        font_family = JetBrainsMono Nerd Font Bold
+        position = 0, -20
         halign = center
         valign = center
+      }
+
+      # Keyboard layout indicator - bottom right, short code (US/RU) with icon
+      label {
+        monitor =
+        text = cmd[update:500] L=$(hyprctl devices -j | jq -r 'first(.keyboards[]|select(.main)|.active_keymap) // "US"'); case "$L" in *ussian*) echo "⌨  RU";; *nglish*) echo "⌨  US";; *) echo "⌨  $(printf %s "$L" | cut -c1-2 | tr a-z A-Z)";; esac
+        color = rgba(${toRgb colors.colors.accent}, 0.95)
+        font_size = 18
+        font_family = JetBrainsMono Nerd Font Bold
+        position = -40, 40
+        halign = right
+        valign = bottom
       }
 
       # Password input field - on all monitors
       input-field {
         monitor =
-        size = 260, 50
+        size = 280, 55
         outline_thickness = 3
-        dots_size = 0.3
-        dots_spacing = 0.15
+        dots_size = 0.5
+        dots_spacing = 0.35
         dots_center = true
         dots_rounding = -1
-        outer_color = rgba(${toRgb colors.colors.accent}, 0.5)
-        inner_color = rgba(${toRgb colors.colors.base}, 0.85)
+        outer_color = rgba(${toRgb colors.colors.accent}, 0.9)
+        inner_color = rgba(${toRgb colors.colors.surface1}, 0.97)
         font_color = rgb(${toRgb colors.colors.text})
         fade_on_empty = false
         fade_timeout = 1000
         placeholder_text = <i><span foreground="##${toRgb colors.colors.subtext0}">🔒 Password...</span></i>
         hide_input = false
-        rounding = 12
+        rounding = 14
         check_color = rgb(${toRgb colors.colors.green})
         fail_color = rgb(${toRgb colors.colors.red})
         fail_text = <i>$FAIL <b>($ATTEMPTS)</b></i>
@@ -743,29 +596,6 @@ in
       }
     '';
 
-    # Color scheme file
-    home.file.".config/hypr/colors".text = ''
-      $background = rgba(1d192bee)
-      $foreground = rgba(c3dde7ee)
-
-      $color0 = rgba(1d192bee)
-      $color1 = rgba(465EA7ee)
-      $color2 = rgba(5A89B6ee)
-      $color3 = rgba(6296CAee)
-      $color4 = rgba(73B3D4ee)
-      $color5 = rgba(7BC7DDee)
-      $color6 = rgba(9CB4E3ee)
-      $color7 = rgba(c3dde7ee)
-      $color8 = rgba(889aa1ee)
-      $color9 = rgba(465EA7ee)
-      $color10 = rgba(5A89B6ee)
-      $color11 = rgba(6296CAee)
-      $color12 = rgba(73B3D4ee)
-      $color13 = rgba(7BC7DDee)
-      $color14 = rgba(9CB4E3ee)
-      $color15 = rgba(c3dde7ee)
-    '';
-
     # nwg-drawer configuration - using dynamic theme colors
     home.file.".config/nwg-drawer/drawer.css".text = ''
       window {
@@ -776,7 +606,7 @@ in
       /* search entry */
       entry {
         background-color: ${rgba colors.colors.surface0 0.8};
-        border-radius: 12px;
+        border-radius: 14px;
         border: 2px solid ${rgba colors.colors.accent 0.3};
         color: ${colors.colors.text};
         margin: 10px;
@@ -813,7 +643,7 @@ in
       /* pinned apps box */
       #pinned-box {
         background-color: ${rgba colors.colors.surface0 0.5};
-        border-radius: 12px;
+        border-radius: 14px;
         margin: 10px;
         padding: 10px;
       }
@@ -821,7 +651,7 @@ in
       /* app grid */
       #apps-grid button {
         background-color: transparent;
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 10px;
         margin: 5px;
       }
@@ -840,7 +670,7 @@ in
     home.file.".config/nwg-dock-hyprland/style.css".text = ''
       window {
         background: ${rgba colors.colors.base 0.75};
-        border-radius: 16px;
+        border-radius: 14px;
         border: 2px solid ${rgba colors.colors.accent 0.3};
         padding: 4px;
       }
@@ -851,7 +681,7 @@ in
 
       button {
         background: transparent;
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 6px;
         margin: 2px;
         border: none;

@@ -205,7 +205,7 @@ let
               vertical: true,
               children: [
                 Widget.Box({ className: "stat-row", children: [
-                  Widget.Label({ className: "stat-icon", label: "󰍛", css: "color: #f5c2e7;" }),
+                  Widget.Label({ className: "stat-icon", label: "󰍛", css: "color: ${c.pink};" }),
                   Widget.Label({ className: "stat-label", label: "CPU" }),
                   Widget.Box({ hexpand: true }),
                   Widget.Label({ className: "stat-value", label: cpu.bind().as(v => v + "%") }),
@@ -218,7 +218,7 @@ let
               vertical: true,
               children: [
                 Widget.Box({ className: "stat-row", children: [
-                  Widget.Label({ className: "stat-icon", label: "󰻠", css: "color: #b5e8e0;" }),
+                  Widget.Label({ className: "stat-icon", label: "󰻠", css: "color: ${c.teal};" }),
                   Widget.Label({ className: "stat-label", label: "RAM" }),
                   Widget.Box({ hexpand: true }),
                   Widget.Label({ className: "stat-value", label: ram.bind().as(v => v.used + "G / " + v.total + "G") }),
@@ -231,13 +231,13 @@ let
               vertical: true,
               children: [
                 Widget.Box({ className: "stat-row", children: [
-                  Widget.Label({ className: "stat-icon", label: "󰈸", css: "color: #96cdfe;" }),
+                  Widget.Label({ className: "stat-icon", label: "󰈸", css: "color: ${c.blue};" }),
                   Widget.Label({ className: "stat-label", label: "CPU Temp" }),
                   Widget.Box({ hexpand: true }),
                   Widget.Label({ className: "stat-value", label: cpuTemp.bind().as(v => v + "°C") }),
                 ]}),
                 Widget.Box({ className: "stat-row", children: [
-                  Widget.Label({ className: "stat-icon", label: "󰢮", css: "color: #89b4fa;" }),
+                  Widget.Label({ className: "stat-icon", label: "󰢮", css: "color: ${c.sapphire};" }),
                   Widget.Label({ className: "stat-label", label: "GPU Temp" }),
                   Widget.Box({ hexpand: true }),
                   Widget.Label({ className: "stat-value", label: gpuTemp.bind().as(v => v > 0 ? v + "°C" : "N/A") }),
@@ -625,7 +625,7 @@ let
     .popup-window {
       background-color: ${rgba c.base 0.95};
       border: 2px solid ${rgba c.accent 0.4};
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 16px;
       min-width: 280px;
     }
@@ -822,6 +822,24 @@ in
     xdg.configFile = {
       "ags/config.js".source = agsConfig;
       "ags/style.css".source = agsStyle;
+    };
+
+    # Popup widgets as a systemd user service; sd-switch restarts on config/style change.
+    systemd.user.services.ags = {
+      Unit = {
+        Description = "AGS popup widgets for Waybar";
+        After = [ "graphical-session.target" ];
+        PartOf = [ "graphical-session.target" ];
+        ConditionEnvironment = "WAYLAND_DISPLAY";
+        X-Restart-Triggers = [ agsConfig agsStyle ];
+      };
+      Service = {
+        Type = "simple";
+        ExecStart = "${pkgs.ags_1}/bin/ags";
+        Restart = "on-failure";
+        RestartSec = "2s";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
     };
   };
 }

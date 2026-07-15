@@ -11,9 +11,12 @@
       ./waybar
       ./wlogout
       ./swaync
+      ./swayosd
+      ./clipboard
     ]
     ++ lib.optionals vars.programs.ags [ ./ags ]
     ++ lib.optionals (vars.browser == "floorp") [ ./floorp ]
+    ++ lib.optionals (vars.browser == "librewolf") [ ./librewolf ]
     ++ lib.optionals vars.programs.vscode [ ./vscode ]
     ++ lib.optionals vars.programs.zed [ ./zed ]
     ++ lib.optionals vars.programs.lunarvim [ ./lunarvim ]

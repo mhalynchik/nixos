@@ -59,8 +59,8 @@
     rosewater = "#f5e0dc";
 
     # Primary accent (used for highlights, borders)
-    accent = "#33ccff";
-    accentAlt = "#00ff99";
+    accent = "#cba6f7";
+    accentAlt = "#b4befe";
 
     # Semantic colors
     success = "#a6e3a1";
@@ -76,24 +76,24 @@
     shadow = "rgba(1a1a1aee)";
   };
 
-  # Waybar-specific colors
+  # Waybar-specific colors (Catppuccin Mocha / HyDE)
   waybar = {
-    workspaceActive = "rgb(181, 232, 224)";
-    workspaceUrgent = "rgb(242, 143, 173)";
-    workspaceHover = "rgb(248, 189, 150)";
-    clock = "rgb(217, 224, 238)";
-    stats = "rgb(181, 232, 224)";
-    audio = "rgb(245, 224, 220)";
-    bluetooth = "rgb(137, 180, 250)";
-    network = "#ABE9B3";
-    keyboard = "rgb(150, 205, 251)";
-    battery = "rgb(181, 232, 224)";
-    batteryCharging = "rgb(171, 233, 179)";
-    batteryWarning = "rgb(248, 189, 150)";
-    batteryCritical = "rgb(242, 143, 173)";
-    powerMenu = "rgb(242, 143, 173)";
-    visualizer = "rgb(137, 220, 235)";
-    launcher = "#7ebae4";
+    workspaceActive = "#cba6f7";
+    workspaceUrgent = "#f38ba8";
+    workspaceHover = "#b4befe";
+    clock = "#cdd6f4";
+    stats = "#94e2d5";
+    audio = "#f5e0dc";
+    bluetooth = "#89b4fa";
+    network = "#a6e3a1";
+    keyboard = "#89dceb";
+    battery = "#94e2d5";
+    batteryCharging = "#a6e3a1";
+    batteryWarning = "#fab387";
+    batteryCritical = "#f38ba8";
+    powerMenu = "#f38ba8";
+    visualizer = "#89dceb";
+    launcher = "#cba6f7";
   };
 }
 

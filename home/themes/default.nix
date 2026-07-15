@@ -1,8 +1,15 @@
-{ config, lib, pkgs, vars, colors, ... }:
+{ config, lib, pkgs, vars, colors, inputs, ... }:
 
 let
   c = colors.colors;
   rgba = colors.toRgba;
+
+  # Curated Gallery GTK/icon selection. For builtin themes galleryAssets is null
+  # and the GTK block below is byte-for-byte identical to the previous config.
+  gallery = import ./gallery { inherit lib inputs; };
+  galleryActive = gallery.isGallery vars.theme;
+  galleryAssets =
+    if galleryActive then gallery.assetsFor { inherit pkgs; theme = vars.theme; } else null;
 in
 {
   imports = [
@@ -11,15 +18,49 @@ in
     ./stylix.nix  # Stylix handles GTK, Qt, and system-wide theming
   ];
 
-  home-manager.users.${vars.username} = {
-    # GTK icon theme (Stylix handles the rest)
+  home-manager.users.${vars.username} = lib.mkMerge [
+  {
+    # GTK icon theme (Stylix handles the rest for builtin themes). When a Gallery
+    # theme is active, its GTK theme + icon theme (read-only store derivations)
+    # are explicitly selected instead of Papirus/Stylix.
     gtk = {
       enable = true;
-      iconTheme = {
-        name = "Papirus-Dark";
-        package = pkgs.papirus-icon-theme;
+      gtk3.extraConfig = {
+        gtk-application-prefer-dark-theme = true;
+      };
+      gtk4.extraConfig = {
+        gtk-application-prefer-dark-theme = true;
+      };
+      iconTheme =
+        if galleryActive then {
+          name = galleryAssets.iconTheme.name;
+          package = galleryAssets.iconTheme.package;
+        } else {
+          name = "Papirus-Dark";
+          package = pkgs.papirus-icon-theme;
+        };
+    } // lib.optionalAttrs galleryActive {
+      theme = {
+        name = galleryAssets.gtkTheme.name;
+        package = galleryAssets.gtkTheme.package;
       };
     };
+
+    dconf.settings = {
+      "org/gnome/desktop/interface" = {
+        color-scheme = "prefer-dark";
+      };
+    };
+
+    # Electron/Chromium apps: run natively on Wayland with server-side
+    # decorations. Dark web content is driven by the xdg-desktop-portal
+    # color-scheme (prefer-dark, set above); this file only fixes rendering.
+    # App chrome that ships its own theme (Cursor, VSCode, Discord, Spotify)
+    # is controlled inside each app, not here.
+    home.file.".config/electron-flags.conf".text = ''
+      --ozone-platform-hint=auto
+      --enable-features=WaylandWindowDecorations
+    '';
 
     # Thunar custom actions and settings
     home.file.".config/Thunar/uca.xml".text = ''
@@ -79,22 +120,25 @@ in
           location:                    center;
           anchor:                      center;
           width:                       700px;
-          border-radius:               12px;
+          border-radius:               14px;
           border:                      2px solid;
           border-color:                @selected;
           background-color:            ${rgba c.base 0.6};
       }
 
       mainbox {
+          enabled:                     true;
           spacing:                     15px;
           padding:                     20px;
           background-color:            transparent;
+          orientation:                 vertical;
+          children:                    [ "inputbar", "message", "listview" ];
       }
 
       inputbar {
           spacing:                     10px;
           padding:                     12px 16px;
-          border-radius:               8px;
+          border-radius:               14px;
           background-color:            @background-alt;
           text-color:                  @foreground;
           children:                    [ "textbox-prompt-colon", "entry" ];
@@ -125,7 +169,7 @@ in
       element {
           spacing:                     15px;
           padding:                     10px 15px;
-          border-radius:               8px;
+          border-radius:               14px;
           background-color:            transparent;
           text-color:                  @foreground;
       }
@@ -166,5 +210,16 @@ in
       </channel>
     '';
 
-  };
+  }
+
+  (lib.mkIf galleryActive {
+    # Expose the curated Gallery GTK/icon derivations through the user data dirs
+    # so Flatpak apps (granted xdg-data/themes|icons in flatpak.nix) can discover
+    # them. These are symlinks to the read-only store, never extracted into $HOME.
+    home.file.".local/share/themes/${galleryAssets.gtkTheme.name}".source =
+      "${galleryAssets.gtkTheme.package}/share/themes/${galleryAssets.gtkTheme.name}";
+    home.file.".local/share/icons/${galleryAssets.iconTheme.name}".source =
+      "${galleryAssets.iconTheme.package}/share/icons/${galleryAssets.iconTheme.name}";
+  })
+  ];
 }

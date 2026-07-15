@@ -1,10 +1,13 @@
-{ config, pkgs, vars, colors, ... }:
+{ config, pkgs, vars, colors, browser, ... }:
 
 let
   rgba = colors.toRgba;
+  rofiTools = import ./tools.nix { inherit pkgs vars browser; };
 in
 {
   home-manager.users.${vars.username} = {
+    home.packages = rofiTools.packages;
+
     programs.rofi = {
       enable = true;
       package = pkgs.rofi-wayland;
@@ -15,6 +18,7 @@ in
       extraConfig = {
         modi = "drun,run,filebrowser,window,games";
         show-icons = true;
+        icon-theme = colors.iconThemeName;
         display-drun = "Apps";
         display-run = "Run";
         display-filebrowser = "Files";
@@ -28,12 +32,14 @@ in
     home.file.".config/rofi/theme.rasi".text = ''
       /*****----- Configuration -----*****/
       configuration {
-          modi:                       "drun,run,filebrowser,window";
+          modi:                       "drun,run,filebrowser,window,games";
           show-icons:                 true;
+          icon-theme:                 "${colors.iconThemeName}";
           display-drun:               "APPS";
           display-run:                "RUN";
           display-filebrowser:        "FILES";
           display-window:             "WINDOW";
+          display-games:              "GAMES";
           drun-display-format:        "{name}";
           window-format:              "{w} · {c} · {t}";
       }
@@ -41,7 +47,7 @@ in
       /*****----- Global Properties -----*****/
       /* Theme: ${colors.displayName} with 60% transparency */
       * {
-          font:                        "${colors.fonts.monospace} 10";
+          font:                        "${colors.fonts.monospace} 12";
           background:                  ${rgba colors.colors.base 0.6};
           background-alt:              ${rgba colors.colors.surface0 0.7};
           foreground:                  ${colors.colors.text};
@@ -56,15 +62,15 @@ in
           location:                    center;
           anchor:                      center;
           fullscreen:                  false;
-          width:                       600px;
+          width:                       640px;
           x-offset:                    0px;
           y-offset:                    0px;
           enabled:                     true;
-          border-radius:               12px;
+          border-radius:               14px;
           border:                      2px solid;
           border-color:                @selected;
           cursor:                      "default";
-          background-color:            @background;
+          background-color:            ${rgba colors.colors.crust 0.92};
       }
 
       /*****----- Main Box -----*****/
@@ -81,8 +87,8 @@ in
       inputbar {
           enabled:                     true;
           spacing:                     10px;
-          padding:                     12px 16px;
-          border-radius:               8px;
+          padding:                     14px 18px;
+          border-radius:               12px;
           background-color:            @background-alt;
           text-color:                  @foreground;
           children:                    [ "textbox-prompt-colon", "entry" ];
@@ -114,8 +120,8 @@ in
       }
 
       button {
-          padding:                     10px 15px;
-          border-radius:               8px;
+          padding:                     12px 18px;
+          border-radius:               10px;
           background-color:            @background-alt;
           text-color:                  inherit;
           cursor:                      pointer;
@@ -130,7 +136,7 @@ in
       listview {
           enabled:                     true;
           columns:                     1;
-          lines:                       8;
+          lines:                       9;
           cycle:                       true;
           dynamic:                     true;
           scrollbar:                   false;
@@ -138,7 +144,7 @@ in
           reverse:                     false;
           fixed-height:                true;
           fixed-columns:               true;
-          spacing:                     5px;
+          spacing:                     4px;
           background-color:            transparent;
           text-color:                  @foreground;
           cursor:                      "default";
@@ -147,48 +153,23 @@ in
       /*****----- Elements -----*****/
       element {
           enabled:                     true;
-          spacing:                     10px;
-          padding:                     8px 12px;
-          border-radius:               8px;
+          spacing:                     12px;
+          padding:                     12px 16px;
+          border-radius:               12px;
           background-color:            transparent;
           text-color:                  @foreground;
           cursor:                      pointer;
       }
 
-      element normal.normal {
-          background-color:            inherit;
-          text-color:                  inherit;
-      }
-
-      element normal.urgent {
-          background-color:            @urgent;
-          text-color:                  @background;
-      }
-
-      element normal.active {
-          background-color:            @active;
-          text-color:                  @background;
-      }
-
       element selected.normal {
           background-color:            @selected;
-          text-color:                  @background;
-      }
-
-      element selected.urgent {
-          background-color:            @urgent;
-          text-color:                  @background;
-      }
-
-      element selected.active {
-          background-color:            @active;
-          text-color:                  @background;
+          text-color:                  ${colors.colors.crust};
       }
 
       element-icon {
           background-color:            transparent;
           text-color:                  inherit;
-          size:                        24px;
+          size:                        28px;
           cursor:                      inherit;
       }
 

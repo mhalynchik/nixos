@@ -125,7 +125,7 @@ in
         }
 
         .notification {
-          border-radius: 12px;
+          border-radius: 14px;
           margin: 6px 12px;
           box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0.5);
           padding: 0;
@@ -162,7 +162,7 @@ in
         }
 
         .notification-default-action {
-          border-radius: 12px;
+          border-radius: 14px;
         }
 
         .summary {
@@ -198,7 +198,7 @@ in
         /* Control Center */
         .control-center {
           background: ${rgba c.base 0.95};
-          border-radius: 16px;
+          border-radius: 14px;
           border: 2px solid ${rgba c.accent 0.3};
           box-shadow: 0 0 15px 0 rgba(0, 0, 0, 0.6);
           margin: 10px;
@@ -235,7 +235,7 @@ in
 
         .widget-dnd {
           background: ${rgba c.surface0 0.6};
-          border-radius: 12px;
+          border-radius: 14px;
           margin: 6px 10px;
           padding: 6px 10px;
         }
@@ -257,7 +257,7 @@ in
         /* Buttons Grid */
         .widget-buttons-grid {
           background: ${rgba c.surface0 0.4};
-          border-radius: 12px;
+          border-radius: 14px;
           margin: 6px 10px;
           padding: 10px;
         }
@@ -283,7 +283,7 @@ in
         /* MPRIS */
         .widget-mpris {
           background: ${rgba c.surface0 0.6};
-          border-radius: 12px;
+          border-radius: 14px;
           margin: 6px 10px;
           padding: 10px;
         }
@@ -318,7 +318,7 @@ in
         .widget-volume,
         .widget-backlight {
           background: ${rgba c.surface0 0.6};
-          border-radius: 12px;
+          border-radius: 14px;
           margin: 6px 10px;
           padding: 6px 10px;
         }
@@ -351,7 +351,7 @@ in
         /* Inhibitors */
         .widget-inhibitors {
           background: ${rgba c.surface0 0.6};
-          border-radius: 12px;
+          border-radius: 14px;
           margin: 6px 10px;
           padding: 6px 10px;
         }

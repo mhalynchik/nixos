@@ -43,7 +43,7 @@
   additionalMonitors = [ ];
   workspaceMonitorBindings = [ ];
   terminal = "kitty";
-  browser = "floorp";
+  browser = "floorp"; # floorp | librewolf (rofi-websearch allowlist)
   kbLayouts = "us, ru";
   kbOptions = "grp:win_space_toggle";
   animatedWallpapersDir = "Pictures/animated";

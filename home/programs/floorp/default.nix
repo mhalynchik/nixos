@@ -1,14 +1,54 @@
-{ config, lib, pkgs, pkgs-unstable, vars, colors, ... }:
+{ config, lib, pkgs, pkgs-unstable, vars, colors, browser, inputs, ... }:
 
 let
+  c = colors.colors;
+  rgba = colors.toRgba;
+  hmDag = inputs.home-manager.lib.hm.dag;
+
+  # Copies the declaratively-generated theme files into every Floorp profile's
+  # chrome/ dir. The profile itself is intentionally NOT Home Manager managed
+  # (to preserve tabs/history), so this idempotent copy is how userChrome is
+  # applied. Safe to run on every rebuild; never touches tabs or session data.
+  floorpApplyTheme = pkgs.writeShellApplication {
+    name = "apply-floorp-theme";
+    runtimeInputs = with pkgs; [ coreutils findutils gnugrep ];
+    text = ''
+      set -euo pipefail
+      floorp_dir="$HOME/.floorp"
+      theme_dir="$HOME/.config/floorp-theme"
+
+      if [ ! -d "$floorp_dir" ]; then
+        echo "apply-floorp-theme: no profile dir yet ($floorp_dir), skipping"
+        exit 0
+      fi
+
+      applied=0
+      while IFS= read -r -d "" profile; do
+        mkdir -p "$profile/chrome"
+        cp -f "$theme_dir/userChrome.css" "$profile/chrome/userChrome.css"
+        cp -f "$theme_dir/userContent.css" "$profile/chrome/userContent.css"
+        if [ -f "$profile/user.js" ]; then
+          if ! grep -q "legacyUserProfileCustomizations.stylesheets" "$profile/user.js"; then
+            cat "$theme_dir/user.js" >> "$profile/user.js"
+          fi
+        else
+          cp -f "$theme_dir/user.js" "$profile/user.js"
+        fi
+        applied=$((applied + 1))
+      done < <(find "$floorp_dir" -maxdepth 1 -type d -name "*.default*" -print0)
+
+      echo "apply-floorp-theme: applied to $applied profile(s)"
+    '';
+  };
 in
 {
   home-manager.users.${vars.username} = {
     # Floorp 12 - Privacy-focused Firefox fork with native transparency and workspaces
-    # Using unstable for latest version (Floorp 12)
-    # Note: floorp was renamed to floorp-bin in nixpkgs starting with version 12.x
+    # Package resolved centrally in flake.nix so $browser, exec-once and this
+    # install all reference the same derivation.
     # IMPORTANT: We ONLY install the package, NO profile management to preserve tabs!
-    home.packages = [ pkgs-unstable.floorp-bin ];
+    # apply-floorp-theme copies the theme into the profile chrome/ dir (see below).
+    home.packages = [ browser.package floorpApplyTheme ];
 
     # user.js for Floorp profile - auto-enables userChrome.css and workspaces
     home.file.".config/floorp-theme/user.js".text = ''
@@ -117,52 +157,56 @@ in
       user_pref("dom.ipc.processCount.webIsolated", 4);
     '';
 
-    # userChrome.css - Beautiful dark theme with transparency
+    # userChrome.css - theme-driven dark theme with transparency.
+    # All colors derive from the active palette (colors.colors) so the browser
+    # chrome follows vars.theme (base16) instead of a hardcoded Catppuccin set.
     home.file.".config/floorp-theme/userChrome.css".text = ''
       /* ═══════════════════════════════════════════════════════════════════════
-         FLOORP CATPPUCCIN MOCHA THEME WITH 60% TRANSPARENCY
-         Beautiful, modern, and translucent
+         FLOORP THEME (theme-driven) WITH TRANSPARENCY
+         Palette follows vars.theme via home/themes/colors.nix
          ═══════════════════════════════════════════════════════════════════════ */
 
       :root {
-        /* Catppuccin Mocha Colors */
-        --cat-rosewater: #f5e0dc;
-        --cat-flamingo: #f2cdcd;
-        --cat-pink: #f5c2e7;
-        --cat-mauve: #cba6f7;
-        --cat-red: #f38ba8;
-        --cat-maroon: #eba0ac;
-        --cat-peach: #fab387;
-        --cat-yellow: #f9e2af;
-        --cat-green: #a6e3a1;
-        --cat-teal: #94e2d5;
-        --cat-sky: #89dceb;
-        --cat-sapphire: #74c7ec;
-        --cat-blue: #89b4fa;
-        --cat-lavender: #b4befe;
-        --cat-text: ${colors.colors.text};
-        --cat-subtext1: #bac2de;
-        --cat-subtext0: ${colors.colors.subtext0};
-        --cat-overlay2: #9399b2;
-        --cat-overlay1: #7f849c;
-        --cat-overlay0: ${colors.colors.overlay0};
-        --cat-surface2: ${colors.colors.surface2};
-        --cat-surface1: ${colors.colors.surface1};
-        --cat-surface0: ${colors.colors.surface0};
-        --cat-base: ${colors.colors.base};
-        --cat-mantle: ${colors.colors.mantle};
-        --cat-crust: ${colors.colors.crust};
-        --cat-accent: ${colors.colors.accent};
+        /* Active-palette colors */
+        --cat-rosewater: ${c.rosewater};
+        --cat-flamingo: ${c.flamingo};
+        --cat-pink: ${c.pink};
+        --cat-mauve: ${c.mauve};
+        --cat-red: ${c.red};
+        --cat-maroon: ${c.maroon};
+        --cat-peach: ${c.peach};
+        --cat-yellow: ${c.yellow};
+        --cat-green: ${c.green};
+        --cat-teal: ${c.teal};
+        --cat-sky: ${c.sky};
+        --cat-sapphire: ${c.sapphire};
+        --cat-blue: ${c.blue};
+        --cat-lavender: ${c.lavender};
+        --cat-text: ${c.text};
+        --cat-subtext1: ${c.subtext1};
+        --cat-subtext0: ${c.subtext0};
+        --cat-overlay2: ${c.overlay2};
+        --cat-overlay1: ${c.overlay1};
+        --cat-overlay0: ${c.overlay0};
+        --cat-surface2: ${c.surface2};
+        --cat-surface1: ${c.surface1};
+        --cat-surface0: ${c.surface0};
+        --cat-base: ${c.base};
+        --cat-mantle: ${c.mantle};
+        --cat-crust: ${c.crust};
+        --cat-accent: ${c.accent};
 
-        /* Transparency values - more transparent! */
+        /* Transparency values */
         --transparency-high: 0.35;    /* 35% opacity - very transparent */
         --transparency-medium: 0.5;   /* 50% opacity */
         --transparency-low: 0.7;      /* 70% opacity */
 
-        /* Base colors with transparency */
-        --bg-transparent: rgba(30, 30, 46, var(--transparency-high));
-        --bg-surface: rgba(49, 50, 68, var(--transparency-medium));
-        --bg-overlay: rgba(69, 71, 90, var(--transparency-low));
+        /* Base colors with transparency (theme-driven) */
+        --bg-transparent: ${rgba c.base 0.35};
+        --bg-surface: ${rgba c.surface0 0.5};
+        --bg-overlay: ${rgba c.surface1 0.7};
+        --accent-soft: ${rgba c.accent 0.15};
+        --accent-medium: ${rgba c.accent 0.3};
 
         /* Override Firefox/Floorp theme colors */
         --lwt-accent-color: transparent !important;
@@ -189,7 +233,7 @@ in
       }
 
       #navigator-toolbox {
-        border-bottom: 1px solid rgba(137, 180, 250, 0.2) !important;
+        border-bottom: 1px solid var(--accent-soft) !important;
       }
 
       /* ─────────────────────────────────────────────────────────────────────────
@@ -218,7 +262,7 @@ in
       }
 
       .tabbrowser-tab:hover:not([selected="true"]) .tab-background {
-        background: rgba(69, 71, 90, 0.5) !important;
+        background: var(--bg-overlay) !important;
       }
 
       .tab-text {
@@ -244,7 +288,7 @@ in
 
       #urlbar:focus-within {
         border-color: var(--cat-accent) !important;
-        box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.3),
+        box-shadow: 0 0 0 2px var(--accent-medium),
                     0 4px 12px rgba(0, 0, 0, 0.3) !important;
       }
 
@@ -289,7 +333,7 @@ in
          ───────────────────────────────────────────────────────────────────────── */
       #sidebar-box {
         background: var(--bg-transparent) !important;
-        border-right: 1px solid rgba(137, 180, 250, 0.1) !important;
+        border-right: 1px solid var(--accent-soft) !important;
       }
 
       #sidebar {
@@ -475,83 +519,11 @@ in
       }
     '';
 
-    # Script to apply Floorp theme
-    home.file.".local/bin/apply-floorp-theme".source = pkgs.writeShellScript "apply-floorp-theme" ''
-      #!/usr/bin/env bash
-      # Apply Catppuccin theme to Floorp (fully automated)
-
-      set -e
-
-      FLOORP_DIR="$HOME/.floorp"
-      THEME_DIR="$HOME/.config/floorp-theme"
-
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "🦊 Floorp Theme Installer"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo ""
-
-      if [ ! -d "$FLOORP_DIR" ]; then
-        echo "⚠ Floorp profile directory not found at $FLOORP_DIR"
-        echo "  Please run Floorp at least once to create a profile."
-        exit 1
-      fi
-
-      # Find all Floorp profiles
-      PROFILES=$(find "$FLOORP_DIR" -maxdepth 1 -type d -name "*.default*")
-
-      if [ -z "$PROFILES" ]; then
-        echo "⚠ No Floorp profiles found"
-        exit 1
-      fi
-
-      for PROFILE in $PROFILES; do
-        echo "📁 Applying theme to: $(basename "$PROFILE")"
-
-        # Create chrome directory
-        mkdir -p "$PROFILE/chrome"
-
-        # Remove old files (fixes permission issues)
-        rm -f "$PROFILE/chrome/userChrome.css" 2>/dev/null || true
-        rm -f "$PROFILE/chrome/userContent.css" 2>/dev/null || true
-
-        # Copy theme files
-        cp "$THEME_DIR/userChrome.css" "$PROFILE/chrome/"
-        cp "$THEME_DIR/userContent.css" "$PROFILE/chrome/"
-
-        # Handle user.js
-        if [ -f "$PROFILE/user.js" ]; then
-          if ! grep -q "legacyUserProfileCustomizations.stylesheets" "$PROFILE/user.js"; then
-            cat "$THEME_DIR/user.js" >> "$PROFILE/user.js"
-            echo "   ✓ Appended settings to user.js"
-          else
-            echo "   ✓ Settings already present in user.js"
-          fi
-        else
-          cp "$THEME_DIR/user.js" "$PROFILE/"
-          echo "   ✓ Created user.js"
-        fi
-
-        echo "   ✓ Theme files copied"
-        echo ""
-      done
-
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo "✅ Floorp theme applied successfully!"
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-      echo ""
-      echo "🔄 Please restart Floorp for changes to take effect."
-      echo ""
-      echo "Features enabled:"
-      echo "  • 60% transparent background"
-      echo "  • Catppuccin Mocha color scheme"
-      echo "  • Workspaces (tab groups)"
-      echo "  • Vertical tabs"
-      echo "  • Tab sleep (memory saver)"
-      echo "  • DuckDuckGo search"
-      echo "  • Session restore on startup"
-      echo "  • Enhanced privacy protection"
+    # Apply theme automatically on every rebuild so the browser follows the
+    # active theme without a manual step. Runs after files are linked; the copy
+    # is idempotent and never touches tabs/session data.
+    home.activation.applyFloorpTheme = hmDag.entryAfter [ "writeBoundary" ] ''
+      run ${floorpApplyTheme}/bin/apply-floorp-theme || true
     '';
-
-    home.file.".local/bin/apply-floorp-theme".executable = true;
   };
 }

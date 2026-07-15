@@ -159,6 +159,23 @@
         "type": "github"
       }
     },
+    "hyde-theme-catppuccin-mocha": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1755848603,
+        "narHash": "sha256-GoXRPYUFdrw6P8OeOsSiFDC9FhaEyo1+lvta0FCJoPY=",
+        "owner": "HyDE-Project",
+        "repo": "hyde-themes",
+        "rev": "415d22a6bb6348a6d09c11307be54c592fb15138",
+        "type": "github"
+      },
+      "original": {
+        "owner": "HyDE-Project",
+        "repo": "hyde-themes",
+        "rev": "415d22a6bb6348a6d09c11307be54c592fb15138",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1767313136,
@@ -220,6 +237,7 @@
     "root": {
       "inputs": {
         "home-manager": "home-manager",
+        "hyde-theme-catppuccin-mocha": "hyde-theme-catppuccin-mocha",
         "nixpkgs": "nixpkgs",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "spicetify-nix": "spicetify-nix",
