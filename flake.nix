@@ -28,6 +28,11 @@
       url = "github:HyDE-Project/hyde-themes/415d22a6bb6348a6d09c11307be54c592fb15138";
       flake = false;
     };
+
+    # Do not follows our nixpkgs: AIRI needs their flake.lock (electron_41).
+    # git+https avoids GitHub API 403 on `github:` fetch. Same commit as
+    # tag v0.12.0-beta.1. Overlay in home/programs/airi is required.
+    airi.url = "git+https://github.com/moeru-ai/airi.git?ref=v0.12.0-beta.1&rev=f14a7ac9a169290d2469a519c4387e3fe3ba2186";
   };
 
   outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, ... }@inputs:

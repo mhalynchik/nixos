@@ -22,6 +22,7 @@
 ]
 ++ lib.optionals vars.features.nvidia [ ../modules/system/nvidia.nix ]
 ++ lib.optionals vars.features.openWebui [ ../modules/system/open-webui.nix ]
+++ lib.optionals vars.features.ollama [ ../modules/system/ollama.nix ]
 ++ lib.optionals vars.features.docker [ ../modules/services/docker.nix ]
 ++ lib.optionals vars.features.k8s [ ../modules/services/k8s.nix ]
 ++ lib.optionals vars.features.vpn [

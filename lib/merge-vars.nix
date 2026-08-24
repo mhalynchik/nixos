@@ -9,4 +9,5 @@ defaults // user // {
   programs = mergeSection "programs";
   vpn = mergeSection "vpn";
   location = defaults.location // (user.location or {});
+  ollama = mergeSection "ollama";
 }

@@ -21,7 +21,7 @@ echo "Существующие значения не изменяются."
 echo "Полный пересоздание: ./bin/wizard-vars.sh $VARS"
 
 missing=()
-for key in features programs theme username homeDirectory gitUsername gitEmail hostname timezone locale supportedLocales hashedPassword monitor additionalMonitors workspaceMonitorBindings terminal browser kbLayouts kbOptions staticWallpapersDir animatedWallpapersDir defaultWallpaper deepcoolScript location vpn gamemodeGpuDevice stateVersion agsPopupTimeout; do
+for key in features programs theme username homeDirectory gitUsername gitEmail hostname timezone locale supportedLocales hashedPassword monitor additionalMonitors workspaceMonitorBindings terminal browser kbLayouts kbOptions staticWallpapersDir animatedWallpapersDir defaultWallpaper deepcoolScript location vpn gamemodeGpuDevice stateVersion agsPopupTimeout ollama; do
   if ! grep -q "$key" "$VARS"; then
     missing+=("$key")
   fi

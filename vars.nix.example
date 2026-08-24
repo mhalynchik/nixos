@@ -10,6 +10,7 @@
     maxSandbox = false;
     maxBypassVpn = false;
     openWebui = false;
+    ollama = false;
     devTools = true;
     flatpak = true;
     sshPasswordAuth = false;
@@ -27,6 +28,7 @@
     zed = false;
     lunarvim = false;
     steam = false;
+    airi = false;
   };
 
   theme = "catppuccin";
@@ -58,4 +60,9 @@
     wireguardConfigs = [ ];
   };
   gamemodeGpuDevice = 0;
+  ollama = {
+    host = "127.0.0.1";
+    port = 11434;
+    loadModels = [ ];
+  };
 }

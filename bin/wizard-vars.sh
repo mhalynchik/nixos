@@ -95,6 +95,7 @@ vpn=$(prompt_bool "VPN (OpenVPN, WireGuard)?" false)
 flatpak=$(prompt_bool "Flatpak?" true)
 devTools=$(prompt_bool "Dev tools?" true)
 openWebui=$(prompt_bool "Open WebUI?" false)
+ollama=$(prompt_bool "Ollama local LLM service?" false)
 maxSandbox=$(prompt_bool "MAX sandbox VM?" false)
 deepcool=$(prompt_bool "DeepCool LCD?" false)
 
@@ -107,6 +108,7 @@ cursor=$(prompt_bool "Cursor editor?" true)
 vscode=$(prompt_bool "VS Code?" true)
 zed=$(prompt_bool "Zed editor?" false)
 lunarvim=$(prompt_bool "LunarVim?" false)
+airi=$(prompt_bool "AIRI desktop companion?" false)
 
 cat > "$OUTPUT" <<EOF
 {
@@ -120,6 +122,7 @@ cat > "$OUTPUT" <<EOF
     maxSandbox = $maxSandbox;
     maxBypassVpn = false;
     openWebui = $openWebui;
+    ollama = $ollama;
     devTools = $devTools;
     flatpak = $flatpak;
     sshPasswordAuth = false;
@@ -136,6 +139,7 @@ cat > "$OUTPUT" <<EOF
     zed = $zed;
     lunarvim = $lunarvim;
     steam = false;
+    airi = $airi;
   };
 
   theme = "$theme";
@@ -167,6 +171,11 @@ cat > "$OUTPUT" <<EOF
     wireguardConfigs = [ ];
   };
   gamemodeGpuDevice = 0;
+  ollama = {
+    host = "127.0.0.1";
+    port = 11434;
+    loadModels = [ ];
+  };
 }
 EOF
 

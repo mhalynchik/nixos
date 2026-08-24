@@ -108,6 +108,7 @@ git pull
 | `flatpak` | Flatpak + PortProton |
 | `devTools` | dotnet, python, postman, unityhub |
 | `openWebui` | Open WebUI service |
+| `ollama` | Ollama на localhost (`ollama.host` / `port` / `loadModels`) |
 | `deepcool` | DeepCool LCD (нужен `deepcoolScript`) |
 | `maxSandbox` | VM sandbox для MAX |
 | `maxBypassVpn` | Трафик VM в обход VPN |
@@ -120,6 +121,9 @@ git pull
 | `ags`, `spotify`, `telegram`, `discord`, `planify` | Приложения |
 | `cursor`, `vscode`, `zed`, `lunarvim` | Редакторы |
 | `steam` | Steam theme module |
+| `airi` | AIRI desktop (Tamagotchi), pin `v0.12.0-beta.1` |
+
+Секция `ollama` (не под `airi`): `host`, `port`, `loadModels`. Флаги независимы: только AIRI, только Ollama, или оба. Подробности: [`docs/airi.md`](docs/airi.md).
 
 Также: `browser` (`floorp` / `librewolf`), `terminal` (`kitty`), `theme` (см. раздел [Темы](#темы)).
 

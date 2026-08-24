@@ -1,5 +1,25 @@
 {
   "nodes": {
+    "airi": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1787514937,
+        "narHash": "sha256-dMDtV78GPdXVIyWB/JUbeQw1CKdVGPQDCF0/PqWiiYc=",
+        "ref": "v0.12.0-beta.1",
+        "rev": "f14a7ac9a169290d2469a519c4387e3fe3ba2186",
+        "revCount": 4266,
+        "type": "git",
+        "url": "https://github.com/moeru-ai/airi.git"
+      },
+      "original": {
+        "ref": "v0.12.0-beta.1",
+        "rev": "f14a7ac9a169290d2469a519c4387e3fe3ba2186",
+        "type": "git",
+        "url": "https://github.com/moeru-ai/airi.git"
+      }
+    },
     "base16": {
       "inputs": {
         "fromYaml": "fromYaml"
@@ -178,16 +198,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1767313136,
-        "narHash": "sha256-16KkgfdYqjaeRGBaYsNrhPRRENs0qzkQVUooNHtoy2w=",
+        "lastModified": 1785967620,
+        "narHash": "sha256-IItrdb7Puk05RqOBWZYFC5X6Wl1sJmCfh5MWVHw5iMM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "ac62194c3917d5f474c1a844b6fd6da2db95077d",
+        "rev": "b7c2ada94fe99c15b0dbcf4d11fd7850b957a436",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
-        "ref": "nixos-25.05",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -204,6 +224,22 @@
       "original": {
         "owner": "NixOS",
         "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1767313136,
+        "narHash": "sha256-16KkgfdYqjaeRGBaYsNrhPRRENs0qzkQVUooNHtoy2w=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "ac62194c3917d5f474c1a844b6fd6da2db95077d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-25.05",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -236,9 +272,10 @@
     },
     "root": {
       "inputs": {
+        "airi": "airi",
         "home-manager": "home-manager",
         "hyde-theme-catppuccin-mocha": "hyde-theme-catppuccin-mocha",
-        "nixpkgs": "nixpkgs",
+        "nixpkgs": "nixpkgs_2",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "spicetify-nix": "spicetify-nix",
         "stylix": "stylix"
