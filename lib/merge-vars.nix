@@ -10,4 +10,6 @@ defaults // user // {
   vpn = mergeSection "vpn";
   location = defaults.location // (user.location or {});
   ollama = mergeSection "ollama";
+  whisper = mergeSection "whisper";
+  piper = mergeSection "piper";
 }

@@ -385,6 +385,15 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
           "float,title:^(File Operation Progress)$"
           "float,class:^(xdg-desktop-portal-gtk)$"
 
+          # AIRI stage: fullscreen, no tile, no compositor blur behind the window.
+          # Chat stays a normal tiled window (title is Chat, not AIRI).
+          "fullscreen,class:^(ai-moeru-airi)$,title:^(AIRI)$"
+          "noblur,class:^(ai-moeru-airi)$,title:^(AIRI)$"
+          "opaque,class:^(ai-moeru-airi)$,title:^(AIRI)$"
+          "noshadow,class:^(ai-moeru-airi)$,title:^(AIRI)$"
+          "noborder,class:^(ai-moeru-airi)$,title:^(AIRI)$"
+          "rounding 0,class:^(ai-moeru-airi)$,title:^(AIRI)$"
+
           # Steam games - Proton/Wine игры
           "workspace 5 silent,class:^(steam_app_.*)$"
           "fullscreen,class:^(steam_app_.*)$"

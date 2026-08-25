@@ -96,6 +96,8 @@ flatpak=$(prompt_bool "Flatpak?" true)
 devTools=$(prompt_bool "Dev tools?" true)
 openWebui=$(prompt_bool "Open WebUI?" false)
 ollama=$(prompt_bool "Ollama local LLM service?" false)
+whisper=$(prompt_bool "Local Whisper STT (OpenAI-compatible)?" false)
+piper=$(prompt_bool "Local Piper Russian TTS (OpenAI-compatible)?" false)
 maxSandbox=$(prompt_bool "MAX sandbox VM?" false)
 deepcool=$(prompt_bool "DeepCool LCD?" false)
 
@@ -123,6 +125,8 @@ cat > "$OUTPUT" <<EOF
     maxBypassVpn = false;
     openWebui = $openWebui;
     ollama = $ollama;
+    whisper = $whisper;
+    piper = $piper;
     devTools = $devTools;
     flatpak = $flatpak;
     sshPasswordAuth = false;
@@ -175,6 +179,17 @@ cat > "$OUTPUT" <<EOF
     host = "127.0.0.1";
     port = 11434;
     loadModels = [ ];
+  };
+  whisper = {
+    host = "127.0.0.1";
+    port = 8178;
+    model = "medium";
+    language = "ru";
+    device = "cpu";
+  };
+  piper = {
+    host = "127.0.0.1";
+    port = 8179;
   };
 }
 EOF

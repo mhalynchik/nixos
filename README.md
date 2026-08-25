@@ -109,6 +109,8 @@ git pull
 | `devTools` | dotnet, python, postman, unityhub |
 | `openWebui` | Open WebUI service |
 | `ollama` | Ollama на localhost (`ollama.host` / `port` / `loadModels`) |
+| `whisper` | локальный Whisper STT (`whisper.host` / `port` / `model` / `language` / `device`) |
+| `piper` | локальный Piper TTS, голос Irina (`piper.host` / `port`) |
 | `deepcool` | DeepCool LCD (нужен `deepcoolScript`) |
 | `maxSandbox` | VM sandbox для MAX |
 | `maxBypassVpn` | Трафик VM в обход VPN |
@@ -123,7 +125,7 @@ git pull
 | `steam` | Steam theme module |
 | `airi` | AIRI desktop (Tamagotchi), pin `v0.12.0-beta.1` |
 
-Секция `ollama` (не под `airi`): `host`, `port`, `loadModels`. Флаги независимы: только AIRI, только Ollama, или оба. Подробности: [`docs/airi.md`](docs/airi.md).
+Секция `ollama` (не под `airi`): `host`, `port`, `loadModels`. Секция `whisper`: `host`, `port`, `model`, `language`, `device`. Секция `piper`: `host`, `port`. Флаги независимы. Подробности: [`docs/airi.md`](docs/airi.md).
 
 Также: `browser` (`floorp` / `librewolf`), `terminal` (`kitty`), `theme` (см. раздел [Темы](#темы)).
 

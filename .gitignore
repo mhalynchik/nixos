@@ -12,3 +12,5 @@ result-*
 .idea/
 .vscode/
 *.code-workspace
+__pycache__/
+*.pyc
