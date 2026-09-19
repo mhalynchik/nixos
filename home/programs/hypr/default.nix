@@ -12,6 +12,7 @@ let
   keybinds = import ./keybinds.nix { inherit lib vars; };
   wallpaper = import ./wallpaper.nix { inherit pkgs vars galleryWallpaperDir; };
   gaming = import ./gaming-mode.nix { inherit pkgs vars lib; };
+  screenshot = import ./screenshot.nix { inherit pkgs; };
 
   cheatsheetFile = pkgs.writeText "hypr-cheatsheet.txt" keybinds.cheatsheetText;
   cheatsheet = pkgs.writeShellApplication {
@@ -181,6 +182,8 @@ let
   '';
 in
 if keybinds.collisionError != null then throw keybinds.collisionError else {
+  # Install the matching PAM service instead of falling back to su.
+  security.pam.services.hyprlock = { };
   home-manager.users.${vars.username} = {
     imports = [
       ./hyprland-environment.nix
@@ -217,6 +220,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       dock-watcher
 
       cheatsheet
+      screenshot
     ] ++ wallpaper.packages
       ++ lib.optional vars.features.gaming gaming.package;
 
@@ -443,7 +447,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
 
           # Предотвращение минимизации Wine окон
           "noinitialfocus,class:^(.*[Ww]ine.*)$"
-          "stayfocused,class:^(.*[Ww]ine.*)$,title:^(?!.*[Mm]enu).*$"
+          "stayfocused,class:^(.*[Ww]ine.*)$,title:negative:.*[Mm]enu.*"
 
           # XWayland Wine windows - не терять фокус
           "stayfocused,class:^(.*\.exe)$"
@@ -480,8 +484,6 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       general {
         hide_cursor = true
         grace = 0
-        no_fade_in = false
-        no_fade_out = false
       }
 
       # Background on all monitors (empty monitor = all)
@@ -500,7 +502,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       label {
         monitor =
         text = cmd[update:1000] echo "$(date +'%H:%M')"
-        color = rgba(${toRgb colors.colors.text}, 1.0)
+        color = ${colors.toRgba colors.colors.text 1.0}
         font_size = 100
         font_family = JetBrainsMono Nerd Font Bold
         position = 0, 180
@@ -514,7 +516,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       label {
         monitor =
         text = cmd[update:60000] echo "$(date +'%A, %d %B')"
-        color = rgba(${toRgb colors.colors.subtext1}, 0.9)
+        color = ${colors.toRgba colors.colors.subtext1 0.9}
         font_size = 22
         font_family = JetBrainsMono Nerd Font
         position = 0, 80
@@ -526,7 +528,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       label {
         monitor =
         text = Hi, ${vars.username} 
-        color = rgba(${toRgb colors.colors.accent}, 1.0)
+        color = ${colors.toRgba colors.colors.accent 1.0}
         font_size = 18
         font_family = JetBrainsMono Nerd Font Bold
         position = 0, -20
@@ -538,7 +540,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       label {
         monitor =
         text = cmd[update:500] L=$(hyprctl devices -j | jq -r 'first(.keyboards[]|select(.main)|.active_keymap) // "US"'); case "$L" in *ussian*) echo "⌨  RU";; *nglish*) echo "⌨  US";; *) echo "⌨  $(printf %s "$L" | cut -c1-2 | tr a-z A-Z)";; esac
-        color = rgba(${toRgb colors.colors.accent}, 0.95)
+        color = ${colors.toRgba colors.colors.accent 0.95}
         font_size = 18
         font_family = JetBrainsMono Nerd Font Bold
         position = -40, 40
@@ -555,8 +557,8 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
         dots_spacing = 0.35
         dots_center = true
         dots_rounding = -1
-        outer_color = rgba(${toRgb colors.colors.accent}, 0.9)
-        inner_color = rgba(${toRgb colors.colors.surface1}, 0.97)
+        outer_color = ${colors.toRgba colors.colors.accent 0.9}
+        inner_color = ${colors.toRgba colors.colors.surface1 0.97}
         font_color = rgb(${toRgb colors.colors.text})
         fade_on_empty = false
         fade_timeout = 1000
@@ -566,7 +568,6 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
         check_color = rgb(${toRgb colors.colors.green})
         fail_color = rgb(${toRgb colors.colors.red})
         fail_text = <i>$FAIL <b>($ATTEMPTS)</b></i>
-        fail_transition = 300
         capslock_color = rgb(${toRgb colors.colors.yellow})
         position = 0, -140
         halign = center
@@ -574,36 +575,24 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
       }
     '';
 
-    # Hypridle configuration
-    home.file.".config/hypr/hypridle.conf".text = ''
-      general {
-        lock_cmd = pidof hyprlock || hyprlock
-        before_sleep_cmd = loginctl lock-session
-        after_sleep_cmd = hyprctl dispatch dpms on
-      }
-
-      listener {
-        timeout = 300
-        on-timeout = brightnessctl -s set 30
-        on-resume = brightnessctl -r
-      }
-
-      listener {
-        timeout = 600
-        on-timeout = loginctl lock-session
-      }
-
-      listener {
-        timeout = 900
-        on-timeout = hyprctl dispatch dpms off
-        on-resume = hyprctl dispatch dpms on
-      }
-
-      listener {
-        timeout = 1800
-        on-timeout = systemctl suspend
-      }
-    '';
+    services.hypridle = {
+      enable = true;
+      settings = {
+        general = {
+          # Let the compositor own the locker so restarting hypridle (for
+          # example during a rebuild) cannot kill an active lock screen.
+          lock_cmd = "pidof hyprlock || hyprctl dispatch exec hyprlock";
+          before_sleep_cmd = "loginctl lock-session";
+          after_sleep_cmd = "hyprctl dispatch dpms on";
+        };
+        listener = [
+          { timeout = 300; on-timeout = "brightnessctl -s set 30"; on-resume = "brightnessctl -r"; }
+          { timeout = 600; on-timeout = "loginctl lock-session"; }
+          { timeout = 900; on-timeout = "hyprctl dispatch dpms off"; on-resume = "hyprctl dispatch dpms on"; }
+          { timeout = 1800; on-timeout = "systemctl suspend"; }
+        ];
+      };
+    };
 
     # nwg-drawer configuration - using dynamic theme colors
     home.file.".config/nwg-drawer/drawer.css".text = ''

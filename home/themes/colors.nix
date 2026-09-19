@@ -48,7 +48,11 @@ let
 in
 {
   # Re-export the active palette
-  inherit (activePalette) name displayName base16 colors hyprland waybar;
+  inherit (activePalette) name displayName colors hyprland waybar;
+  # Base16 consumers use base0D for selection/accent. Match desktop widgets.
+  base16 = activePalette.base16 // {
+    base0D = builtins.substring 1 6 activePalette.colors.accent;
+  };
 
   inherit galleryActive;
 

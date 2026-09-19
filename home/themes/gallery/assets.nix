@@ -1,7 +1,7 @@
 # HyDE Gallery asset unpacking: GTK/icon archives become read-only Nix
 # derivations (never extracted into $HOME during activation). Wallpapers are
 # exposed as a read-only store path for the wallpaper domain.
-{ pkgs, source, def }:
+{ pkgs, source, def, gtkAccent ? null }:
 
 let
   themePath = "${source}/${def.themeSubdir}";
@@ -57,6 +57,25 @@ let
         ls -1A "$dest" >&2 || true
         exit 1
       fi
+
+      ${pkgs.lib.optionalString (shareSubdir == "themes" && gtkAccent != null && def.gtk ? accent) ''
+        # Compiled Gallery CSS/SVG also contains literal accents, beyond GTK's
+        # named colors. Adapt these assets without changing the pinned source.
+        ${pkgs.python3}/bin/python3 - "$dest/${themeName}" <<'PY'
+        from pathlib import Path
+        import re
+        import sys
+        original = "${def.gtk.accent}"
+        accent = "${gtkAccent}"
+        channels = lambda color: [str(int(color[i:i+2], 16)) for i in (1, 3, 5)]
+        pattern = r"\s*,\s*".join(channels(original))
+        for path in Path(sys.argv[1]).rglob("*"):
+            if path.is_file() and not path.is_symlink() and path.suffix in (".css", ".svg"):
+                text = re.sub(re.escape(original), accent, path.read_text(), flags=re.I)
+                text = re.sub(pattern, ", ".join(channels(accent)), text)
+                path.write_text(text)
+        PY
+      ''}
     '';
 in
 {

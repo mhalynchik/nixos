@@ -2,6 +2,17 @@
 
 Модульная NixOS-конфигурация с Hyprland, Home Manager и выбором модулей через `vars.nix`.
 
+Для разработки и проверки интерфейса есть [отдельная тестовая VM](docs/ui-vm.md):
+`bin/ui-vm start`, `bin/ui-vm wait`, `bin/ui-vm screenshot`, `bin/ui-vm smoke`.
+Она запускает модули рабочего стола без применения изменений к основной системе.
+
+**После реализации новой функции или исправления поведения проверьте изменение
+в VM до завершения задачи.** Для агентов и участников проекта описан
+[порядок проверки и критерии готовности](docs/ui-vm.md#цикл-разработки):
+сборка текущих исходников, включение проверяемой функции, реальный сценарий,
+регрессионные тесты и доказательства результата. Если запуск недоступен,
+укажите конкретную причину и непроверенные сценарии.
+
 ## Архитектура
 
 ```
@@ -106,11 +117,13 @@ git pull
 | `nvidia` | NVIDIA drivers |
 | `vpn` | OpenVPN + WireGuard |
 | `flatpak` | Flatpak + PortProton |
-| `devTools` | dotnet, python, postman, unityhub |
+| `devTools` | dotnet, python, postman, unityhub, gitleaks |
 | `openWebui` | Open WebUI service |
 | `ollama` | Ollama на localhost (`ollama.host` / `port` / `loadModels`) |
 | `whisper` | локальный Whisper STT (`whisper.host` / `port` / `model` / `language` / `device`) |
 | `piper` | локальный Piper TTS, голос Irina (`piper.host` / `port`) |
+| `weylus` | Weylus: Android-планшет как графический планшет (`uinput`, TCP 1701/9001) |
+| `sunshine` | Sunshine host для Moonlight (NVENC, Wayland `CAP_SYS_ADMIN`) |
 | `deepcool` | DeepCool LCD (нужен `deepcoolScript`) |
 | `maxSandbox` | VM sandbox для MAX |
 | `maxBypassVpn` | Трафик VM в обход VPN |
@@ -122,6 +135,8 @@ git pull
 |------|----------|
 | `ags`, `spotify`, `telegram`, `discord`, `planify` | Приложения |
 | `cursor`, `vscode`, `zed`, `lunarvim` | Редакторы |
+| `codex` | ChatGPT Codex CLI (`pkgs-unstable.codex`) |
+| `chatgpt` | ChatGPT desktop (официальный `.deb`, вход по подписке) |
 | `steam` | Steam theme module |
 | `airi` | AIRI desktop (Tamagotchi), pin `v0.12.0-beta.1` |
 
@@ -336,10 +351,15 @@ sudo nixos-rebuild switch --flake /etc/nixos#default --impure
 
 ## Документация
 
+- [Тестирование новых функций в VM](docs/ui-vm.md)
 - [Установка с ISO](docs/install-iso.md)
 - [Playwright на NixOS](docs/playwright.md)
 - [MAX sandbox VM](docs/max-sandbox-vm.md)
 - [Windows bootable USB](docs/windows-bootable-usb.md)
+- [Weylus (планшет)](docs/weylus.md)
+- [Sunshine + Moonlight](docs/sunshine.md)
+- [ChatGPT Codex CLI](docs/codex.md)
+- [ChatGPT desktop](docs/chatgpt.md)
 
 ## Миграция
 

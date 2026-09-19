@@ -5,40 +5,11 @@ let
   rgba = colors.toRgba;
   hmDag = inputs.home-manager.lib.hm.dag;
 
-  # Copies the declaratively-generated theme files into every Floorp profile's
-  # chrome/ dir. The profile itself is intentionally NOT Home Manager managed
-  # (to preserve tabs/history), so this idempotent copy is how userChrome is
-  # applied. Safe to run on every rebuild; never touches tabs or session data.
-  floorpApplyTheme = pkgs.writeShellApplication {
-    name = "apply-floorp-theme";
-    runtimeInputs = with pkgs; [ coreutils findutils gnugrep ];
-    text = ''
-      set -euo pipefail
-      floorp_dir="$HOME/.floorp"
-      theme_dir="$HOME/.config/floorp-theme"
-
-      if [ ! -d "$floorp_dir" ]; then
-        echo "apply-floorp-theme: no profile dir yet ($floorp_dir), skipping"
-        exit 0
-      fi
-
-      applied=0
-      while IFS= read -r -d "" profile; do
-        mkdir -p "$profile/chrome"
-        cp -f "$theme_dir/userChrome.css" "$profile/chrome/userChrome.css"
-        cp -f "$theme_dir/userContent.css" "$profile/chrome/userContent.css"
-        if [ -f "$profile/user.js" ]; then
-          if ! grep -q "legacyUserProfileCustomizations.stylesheets" "$profile/user.js"; then
-            cat "$theme_dir/user.js" >> "$profile/user.js"
-          fi
-        else
-          cp -f "$theme_dir/user.js" "$profile/user.js"
-        fi
-        applied=$((applied + 1))
-      done < <(find "$floorp_dir" -maxdepth 1 -type d -name "*.default*" -print0)
-
-      echo "apply-floorp-theme: applied to $applied profile(s)"
-    '';
+  floorpApplyTheme = import ../../../lib/browser-theme.nix {
+    inherit pkgs;
+    name = "floorp";
+    package = browser.package;
+    homeConfig = config.home-manager.users.${vars.username};
   };
 in
 {
@@ -522,8 +493,8 @@ in
     # Apply theme automatically on every rebuild so the browser follows the
     # active theme without a manual step. Runs after files are linked; the copy
     # is idempotent and never touches tabs/session data.
-    home.activation.applyFloorpTheme = hmDag.entryAfter [ "writeBoundary" ] ''
-      run ${floorpApplyTheme}/bin/apply-floorp-theme || true
+    home.activation.applyFloorpTheme = hmDag.entryAfter [ "linkGeneration" ] ''
+      run ${floorpApplyTheme}/bin/apply-floorp-theme
     '';
   };
 }

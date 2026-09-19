@@ -1,19 +1,19 @@
-{ config, pkgs, lib, vars, colors, ... }:
+{ config, pkgs, pkgs-unstable, lib, vars, colors, ... }:
 
 let
 in
 {
   home-manager.users.${vars.username} = {
-    # Zed editor is installed via home.packages in home.nix
+    home.packages = [ pkgs-unstable.zed-editor ];
 
-    # Zed settings.json with transparency and Catppuccin theme
+    # Select the palette-derived theme installed below.
     home.file.".config/zed/settings.json".text = builtins.toJSON {
       # Theme with transparency
       # Zed supports window transparency on supported platforms
       theme = {
         mode = "dark";
-        dark = "Catppuccin Mocha";
-        light = "Catppuccin Latte";
+        dark = "System Palette";
+        light = "System Palette";
       };
 
       # Window transparency (0.0 - 1.0)
@@ -208,16 +208,35 @@ in
       }
     ];
 
-    # Custom Catppuccin Mocha theme with transparency
+    # Keep the existing filename so theme switches replace the same asset.
     home.file.".config/zed/themes/catppuccin-mocha-transparent.json".text = builtins.toJSON {
       "$schema" = "https://zed.dev/schema/themes/v0.1.0.json";
-      name = "Catppuccin Mocha Transparent";
+      name = "System Palette";
       author = "Custom";
       themes = [
         {
-          name = "Catppuccin Mocha Transparent";
+          name = "System Palette";
           appearance = "dark";
-          style = {
+          style = (lib.foldlAttrs (acc: name: color: acc // {
+            "${name}" = color;
+            "${name}.background" = "${color}20";
+            "${name}.border" = "${color}60";
+          }) { } {
+            error = colors.colors.error;
+            warning = colors.colors.warning;
+            success = colors.colors.success;
+            info = colors.colors.info;
+            hint = colors.colors.lavender;
+            created = colors.colors.green;
+            deleted = colors.colors.red;
+            modified = colors.colors.yellow;
+            renamed = colors.colors.blue;
+            predictive = colors.colors.overlay1;
+            conflict = colors.colors.peach;
+            ignored = colors.colors.subtext0;
+            hidden = colors.colors.overlay0;
+            unreachable = colors.colors.overlay0;
+          }) // {
             # Background with 60% opacity representation
             # Zed themes don't support direct alpha, but we use darker colors
             background = colors.colors.base;

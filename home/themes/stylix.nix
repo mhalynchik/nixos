@@ -104,7 +104,7 @@ in
       waybar.enable = false;  # We have custom waybar with theme colors
 
       # Editors
-      vscode.enable = false;  # We have custom vscode config
+      vscode.enable = true;
       vim.enable = true;
       neovim.enable = true;
 

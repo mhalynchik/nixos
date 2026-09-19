@@ -98,6 +98,8 @@ openWebui=$(prompt_bool "Open WebUI?" false)
 ollama=$(prompt_bool "Ollama local LLM service?" false)
 whisper=$(prompt_bool "Local Whisper STT (OpenAI-compatible)?" false)
 piper=$(prompt_bool "Local Piper Russian TTS (OpenAI-compatible)?" false)
+weylus=$(prompt_bool "Weylus (Android tablet as graphic tablet)?" false)
+sunshine=$(prompt_bool "Sunshine (Moonlight host for tablet/stream)?" false)
 maxSandbox=$(prompt_bool "MAX sandbox VM?" false)
 deepcool=$(prompt_bool "DeepCool LCD?" false)
 
@@ -111,6 +113,8 @@ vscode=$(prompt_bool "VS Code?" true)
 zed=$(prompt_bool "Zed editor?" false)
 lunarvim=$(prompt_bool "LunarVim?" false)
 airi=$(prompt_bool "AIRI desktop companion?" false)
+codex=$(prompt_bool "ChatGPT Codex CLI?" true)
+chatgpt=$(prompt_bool "ChatGPT desktop app?" true)
 
 cat > "$OUTPUT" <<EOF
 {
@@ -127,6 +131,8 @@ cat > "$OUTPUT" <<EOF
     ollama = $ollama;
     whisper = $whisper;
     piper = $piper;
+    weylus = $weylus;
+    sunshine = $sunshine;
     devTools = $devTools;
     flatpak = $flatpak;
     sshPasswordAuth = false;
@@ -144,6 +150,8 @@ cat > "$OUTPUT" <<EOF
     lunarvim = $lunarvim;
     steam = false;
     airi = $airi;
+    codex = $codex;
+    chatgpt = $chatgpt;
   };
 
   theme = "$theme";

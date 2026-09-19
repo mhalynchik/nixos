@@ -40,6 +40,7 @@
 
   environment.systemPackages = with pkgs; [
     gsettings-desktop-schemas
+    gtk3
     gnome-settings-daemon
     adwaita-icon-theme
     pulseaudio
@@ -64,6 +65,6 @@
 
   environment.pathsToLink = [ "/share/gsettings-schemas" ];
   environment.extraInit = ''
-    export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:$XDG_DATA_DIRS"
+    export XDG_DATA_DIRS="/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share:${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS"
   '';
 }

@@ -12,6 +12,14 @@
     home.homeDirectory = vars.homeDirectory;
 
     programs.obs-studio.enable = true;
+    # Stylix targets configure these modules; installing bare packages alone
+    # does not generate their theme files.
+    programs.btop.enable = true;
+    programs.lazygit.enable = true;
+    programs.vim.enable = true;
+    programs.neovim.enable = true;
+    programs.bat.enable = true;
+    programs.fzf.enable = true;
 
     home.packages =
       (with pkgs; [
@@ -22,7 +30,6 @@
         pamixer
         brightnessctl
         tty-clock
-        btop
         tokyonight-gtk-theme
         zenity
         gnome-tweaks
@@ -36,13 +43,10 @@
         viewnior
         tesseract4
         swappy
-        vim
-        neovim
         nano
         gedit
         git
-        lazygit
-        nodejs_20
+        nodejs_22
         uv
         sqlite
         gcc
@@ -72,6 +76,7 @@
         unityhub
         nil
         nixpkgs-fmt
+        gitleaks
         pyright
         black
         isort
@@ -88,8 +93,8 @@
           ipykernel
         ]))
       ])
-      ++ lib.optionals vars.features.devTools (with pkgs-unstable; [ zed-editor ])
       ++ lib.optionals vars.programs.lunarvim (with pkgs; [ lunarvim ])
+      ++ lib.optionals vars.programs.codex (with pkgs-unstable; [ codex ])
       ++ lib.optionals vars.programs.planify (with pkgs; [ planify ])
       ++ lib.optionals vars.programs.spotify (with pkgs; [ lollypop cava ])
       ++ lib.optionals vars.programs.telegram (with pkgs; [

@@ -5,40 +5,11 @@ let
   rgba = colors.toRgba;
   hmDag = inputs.home-manager.lib.hm.dag;
 
-  # Copies the declaratively-generated theme into every LibreWolf profile's
-  # chrome/ dir. The profile is intentionally NOT Home Manager managed (to
-  # preserve tabs/history), so this idempotent copy is how userChrome is
-  # applied. Safe to run on every rebuild; never touches tabs or session data.
-  librewolfApplyTheme = pkgs.writeShellApplication {
-    name = "apply-librewolf-theme";
-    runtimeInputs = with pkgs; [ coreutils findutils gnugrep ];
-    text = ''
-      set -euo pipefail
-      wolf_dir="$HOME/.librewolf"
-      theme_dir="$HOME/.config/librewolf-theme"
-
-      if [ ! -d "$wolf_dir" ]; then
-        echo "apply-librewolf-theme: no profile dir yet ($wolf_dir), skipping"
-        exit 0
-      fi
-
-      applied=0
-      while IFS= read -r -d "" profile; do
-        mkdir -p "$profile/chrome"
-        cp -f "$theme_dir/userChrome.css" "$profile/chrome/userChrome.css"
-        cp -f "$theme_dir/userContent.css" "$profile/chrome/userContent.css"
-        if [ -f "$profile/user.js" ]; then
-          if ! grep -q "legacyUserProfileCustomizations.stylesheets" "$profile/user.js"; then
-            cat "$theme_dir/user.js" >> "$profile/user.js"
-          fi
-        else
-          cp -f "$theme_dir/user.js" "$profile/user.js"
-        fi
-        applied=$((applied + 1))
-      done < <(find "$wolf_dir" -maxdepth 1 -type d -name "*.default*" -print0)
-
-      echo "apply-librewolf-theme: applied to $applied profile(s)"
-    '';
+  librewolfApplyTheme = import ../../../lib/browser-theme.nix {
+    inherit pkgs;
+    name = "librewolf";
+    package = browser.package;
+    homeConfig = config.home-manager.users.${vars.username};
   };
 in
 {
@@ -236,8 +207,8 @@ in
     '';
 
     # Apply theme automatically on every rebuild (idempotent; preserves tabs).
-    home.activation.applyLibrewolfTheme = hmDag.entryAfter [ "writeBoundary" ] ''
-      run ${librewolfApplyTheme}/bin/apply-librewolf-theme || true
+    home.activation.applyLibrewolfTheme = hmDag.entryAfter [ "linkGeneration" ] ''
+      run ${librewolfApplyTheme}/bin/apply-librewolf-theme
     '';
   };
 }

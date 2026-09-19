@@ -86,6 +86,7 @@
     "obsidian"
     "corefonts"
     "cursor"
+    "chatgpt"
     "ventoy"
   ];
 

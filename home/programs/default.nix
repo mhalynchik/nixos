@@ -23,6 +23,7 @@
     ++ lib.optionals vars.programs.cursor [ ./cursor ]
     ++ lib.optionals vars.programs.spotify [ ./spotify ]
     ++ lib.optionals vars.programs.airi [ ./airi ]
+    ++ lib.optionals vars.programs.chatgpt [ ./chatgpt ]
     ++ lib.optionals vars.programs.telegram [ ./telegram ]
     ++ lib.optionals vars.programs.planify [ ./planify ]
     ++ lib.optionals (vars.features.gaming && vars.programs.steam) [ ./steam ];

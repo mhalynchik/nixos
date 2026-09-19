@@ -25,6 +25,8 @@
 ++ lib.optionals vars.features.ollama [ ../modules/system/ollama.nix ]
 ++ lib.optionals vars.features.whisper [ ../modules/system/whisper.nix ]
 ++ lib.optionals vars.features.piper [ ../modules/system/piper.nix ]
+++ lib.optionals vars.features.weylus [ ../modules/system/weylus.nix ]
+++ lib.optionals vars.features.sunshine [ ../modules/system/sunshine.nix ]
 ++ lib.optionals vars.features.docker [ ../modules/services/docker.nix ]
 ++ lib.optionals vars.features.k8s [ ../modules/services/k8s.nix ]
 ++ lib.optionals vars.features.vpn [

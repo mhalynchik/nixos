@@ -13,6 +13,8 @@
     ollama = false;
     whisper = false;
     piper = false;
+    weylus = false;
+    sunshine = false;
     devTools = true;
     flatpak = true;
     sshPasswordAuth = false;
@@ -31,6 +33,8 @@
     lunarvim = false;
     steam = false;
     airi = false;
+    codex = true;
+    chatgpt = true;
   };
 
   theme = "catppuccin";

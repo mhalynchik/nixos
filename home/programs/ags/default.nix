@@ -9,18 +9,20 @@ let
   agsConfig = pkgs.writeText "config.js" ''
     // AGS Popup Widgets for Waybar
     // Toggle windows with: ags -t <window-name>
+    import Gdk from "gi://Gdk?version=3.0";
 
     const hyprland = await Service.import("hyprland");
     const network = await Service.import("network");
     const bluetooth = await Service.import("bluetooth");
     const audio = await Service.import("audio");
 
-    // Helper to get current monitor (where cursor is)
+    // Hyprland IDs need not match GDK indices (for example after hotplug).
     function getCurrentMonitor() {
-      try {
-        const focusedMonitor = hyprland.monitors.find(m => m.focused);
-        return focusedMonitor ? focusedMonitor.id : 0;
-      } catch(e) { return 0; }
+      const display = Gdk.Display.get_default();
+      const focused = hyprland.monitors.find(m => m.focused);
+      return focused
+        ? display.get_monitor_at_point(focused.x + 1, focused.y + 1)
+        : display.get_monitor(0);
     }
 
     // All popup window names
@@ -60,21 +62,14 @@ let
       }
     }
 
-    // Track if window was opened by user (not initial setup)
-    let windowInitialized = {};
-
     // Common popup window setup with multi-monitor support
     function setupPopupWindow(self, windowName) {
-      windowInitialized[windowName] = false;
       self.keybind("Escape", () => App.closeWindow(windowName));
       self.connect("notify::visible", () => {
         if (self.visible) {
           // Move popup to current monitor when opened
           self.gdkmonitor = getCurrentMonitor();
-          if (windowInitialized[windowName]) {
-            closeOtherPopups(windowName);
-          }
-          windowInitialized[windowName] = true;
+          closeOtherPopups(windowName);
           setupAutoClose(windowName);
         } else {
           cancelAutoClose(windowName);
@@ -99,13 +94,22 @@ let
       poll: [60000, ["date", "+%A, %d %B %Y"], out => out.trim()],
     });
 
+    let previousCpu = null;
     const cpu = Variable(0, {
       poll: [2000, ["bash", "-c", "cat /proc/stat | head -1"], out => {
         try {
-          const values = out.split(/\s+/).slice(1).map(Number);
-          const idle = values[3] || 0;
-          const total = values.reduce((a, b) => a + b, 0) || 1;
-          return Math.round((1 - idle / total) * 100);
+          // guest/guest_nice are already included in user/nice.
+          const values = out.trim().split(/\s+/).slice(1, 9).map(Number);
+          if (values.length !== 8 || !values.every(Number.isFinite)) return 0;
+          const sample = {
+            idle: values[3] + values[4],
+            total: values.reduce((a, b) => a + b, 0),
+          };
+          const previous = previousCpu;
+          previousCpu = sample;
+          if (!previous || sample.total <= previous.total || sample.idle < previous.idle) return 0;
+          const usage = 1 - (sample.idle - previous.idle) / (sample.total - previous.total);
+          return Math.round(Math.max(0, Math.min(1, usage)) * 100);
         } catch(e) { return 0; }
       }],
     });
@@ -480,7 +484,7 @@ let
               vertical: true,
               children: audio.bind("speakers").as(speakers =>
                 speakers.map(sink => Widget.Button({
-                  className: sink.is_default ? "sink-item default" : "sink-item",
+                  className: audio.speaker.bind("id").as(id => id === sink.id ? "sink-item default" : "sink-item"),
                   onClicked: () => {
                     Utils.execAsync(["pactl", "set-default-sink", sink.name]);
                   },
@@ -491,7 +495,10 @@ let
                       truncate: "end",
                     }),
                     Widget.Box({ hexpand: true }),
-                    sink.is_default ? Widget.Label({ className: "connected-badge", label: "󰄬" }) : Widget.Label({ label: "" }),
+                    Widget.Label({
+                      className: "connected-badge",
+                      label: audio.speaker.bind("id").as(id => id === sink.id ? "󰄬" : ""),
+                    }),
                   ]}),
                 }))
               ),

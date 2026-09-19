@@ -19,6 +19,7 @@ let
       gtk = {
         archive = "Source/Gtk_CatppuccinMocha.tar.gz";
         themeName = "Catppuccin-Mocha";
+        accent = "#f5e0dc";
       };
       icon = {
         archive = "Source/Icon_TelaDracula.tar.gz";
@@ -60,8 +61,8 @@ in
 
   # Unpacked GTK/icon asset derivations for the active Gallery theme (needs
   # pkgs). Returns null for builtin themes.
-  assetsFor = { pkgs, theme }:
+  assetsFor = { pkgs, theme, gtkAccent ? null }:
     let def = _def theme;
     in if def == null then null
-       else import ./assets.nix { inherit pkgs def; source = def.source; };
+       else import ./assets.nix { inherit pkgs def gtkAccent; source = def.source; };
 }

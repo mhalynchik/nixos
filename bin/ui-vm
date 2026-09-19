@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+"""Build and operate the disposable NixOS UI VM; Python standard library only."""
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import shlex
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import time
+
+
+REPO = Path(__file__).resolve().parent.parent
+DEFAULT_STATE = (
+    Path.home() / ".local/share/agent-workspaces/ui-vm"
+    / hashlib.sha256(str(REPO).encode()).hexdigest()[:12]
+)
+STATE = Path(os.environ.get("UI_VM_STATE", DEFAULT_STATE)).expanduser().resolve()
+
+
+class QMP:
+    def __enter__(self):
+        self.socket = socket.socket(socket.AF_UNIX)
+        self.socket.settimeout(10)
+        try:
+            self.socket.connect(str(STATE / "qmp.sock"))
+            self.stream = self.socket.makefile("rwb")
+            greeting = json.loads(self.stream.readline())
+            if "QMP" not in greeting:
+                raise RuntimeError("Unexpected QMP greeting")
+            self.execute("qmp_capabilities")
+        except Exception:
+            self.socket.close()
+            raise
+        return self
+
+    def execute(self, command, arguments=None):
+        request = {"execute": command, "id": "ui-vm"}
+        if arguments is not None:
+            request["arguments"] = arguments
+        self.stream.write(json.dumps(request).encode() + b"\n")
+        self.stream.flush()
+        while True:
+            line = self.stream.readline()
+            if not line:
+                raise RuntimeError("QEMU closed the control connection")
+            response = json.loads(line)
+            if response.get("id") != "ui-vm":
+                continue
+            if "error" in response:
+                raise RuntimeError(response["error"]["desc"])
+            return response["return"]
+
+    def __exit__(self, *_):
+        self.stream.close()
+        self.socket.close()
+
+
+def running():
+    try:
+        with QMP() as qmp:
+            return qmp.execute("query-status")
+    except (OSError, ValueError, RuntimeError):
+        return None
+
+
+def build():
+    # path: includes new/untracked files without staging them in Git.
+    subprocess.run([
+        "nix", "build", "--no-write-lock-file", "--out-link", str(STATE / "build"),
+        f"path:{REPO}#nixosConfigurations.ui-test.config.system.build.vm",
+    ], check=True)
+
+
+def ssh_command(command):
+    return [
+        "ssh", "-F", "/dev/null", "-i", str(STATE / "ssh"), "-p", "22222",
+        "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=3", "-o", "StrictHostKeyChecking=accept-new",
+        "-o", f"UserKnownHostsFile={STATE / 'known_hosts'}",
+        "ui@127.0.0.1", shlex.join(command),
+    ]
+
+
+def guest(command, **kwargs):
+    return subprocess.run(ssh_command(command), **kwargs)
+
+
+def start(no_build, window=False):
+    if running():
+        raise RuntimeError("VM is already running; stop it before rebuilding/restarting")
+    if not os.access("/dev/kvm", os.R_OK | os.W_OK):
+        raise RuntimeError("KVM is unavailable; grant this user access to /dev/kvm")
+    if not no_build:
+        build()
+    launchers = list((STATE / "build/bin").glob("run-*-vm"))
+    if len(launchers) != 1:
+        raise RuntimeError("VM build missing; run bin/ui-vm build first")
+    (STATE / "control").mkdir(exist_ok=True)
+    if not (STATE / "ssh").exists():
+        subprocess.run([
+            "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(STATE / "ssh"),
+        ], check=True)
+    shutil.copyfile(STATE / "ssh.pub", STATE / "control/ssh.pub")
+    for name in ("qmp.sock", "serial.sock", "qemu.pid"):
+        (STATE / name).unlink(missing_ok=True)
+    env = os.environ.copy()
+    # Do not inherit unrelated QEMU overrides from the host shell.
+    for name in list(env):
+        if name.startswith(("QEMU_", "NIXPKGS_QEMU_")) or name in ("USE_TMPDIR", "NIX_EFI_VARS"):
+            del env[name]
+    env.update(UI_VM_STATE=str(STATE), NIX_DISK_IMAGE=str(STATE / "disk.qcow2"))
+    with (STATE / "qemu.log").open("wb") as log:
+        process = subprocess.Popen([
+            str(launchers[0]), "-display", "gtk,gl=on" if window else "egl-headless",
+            "-qmp", f"unix:{STATE / 'qmp.sock'},server=on,wait=off",
+            "-pidfile", str(STATE / "qemu.pid"),
+            "-chardev", f"socket,id=serial0,path={STATE / 'serial.sock'},server=on,wait=off,logfile={STATE / 'serial.log'}",
+            "-serial", "chardev:serial0", "-monitor", "none",
+        ], cwd=STATE, env=env, stdin=subprocess.DEVNULL, stdout=log,
+            stderr=subprocess.STDOUT, start_new_session=True)
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"QEMU exited ({process.returncode}); see {STATE / 'qemu.log'}")
+        if running():
+            print(f"VM started. State: {STATE}\nWait for desktop: bin/ui-vm wait")
+            return
+        time.sleep(0.5)
+    raise RuntimeError(f"QMP startup timed out; inspect {STATE / 'qemu.log'}")
+
+
+def wait_desktop(timeout):
+    deadline = time.monotonic() + timeout
+    last = ""
+    while time.monotonic() < deadline:
+        if not running():
+            raise RuntimeError("VM is not running")
+        result = guest([
+            "bash", "-lc",
+            "set -o pipefail; ui-session hyprctl monitors -j | jq -e 'length > 0' && "
+            "systemctl --user is-active waybar.service ags.service",
+        ], capture_output=True, text=True, timeout=15)
+        if result.returncode == 0:
+            print("Hyprland, Waybar and AGS are ready")
+            return
+        last = result.stderr or result.stdout
+        time.sleep(2)
+    raise RuntimeError(f"Desktop did not become ready within {timeout}s: {last.strip()}")
+
+
+def screenshot(path):
+    path = path.expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with QMP() as qmp:
+            qmp.execute("screendump", {"filename": str(path), "format": "png"})
+    except RuntimeError as error:
+        if "no surface" not in str(error):
+            raise
+        # EGL/virgl scanout has no CPU surface for QMP. Capture Wayland in the guest.
+        result = guest(["ui-session", "grim", "-"], check=True, capture_output=True, timeout=15)
+        if not result.stdout.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise RuntimeError("Guest screenshot did not produce a PNG")
+        path.write_bytes(result.stdout)
+    return path
+
+
+def key(chord):
+    aliases = {"super": "meta_l", "enter": "ret", "escape": "esc"}
+    with QMP() as qmp:
+        qmp.execute("send-key", {
+            "keys": [{"type": "qcode", "data": aliases.get(part, part)} for part in chord.split("-")],
+            "hold-time": 100,
+        })
+
+
+def pointer(x, y, button=None):
+    path = screenshot(STATE / "pointer-screen.png")
+    with path.open("rb") as stream:
+        header = stream.read(24)
+    if header[:8] != b"\x89PNG\r\n\x1a\n":
+        raise RuntimeError("QEMU did not produce a PNG screenshot")
+    width, height = struct.unpack(">II", header[16:24])
+    if not (0 <= x < width and 0 <= y < height):
+        raise RuntimeError(f"Coordinates outside {width}x{height} screen")
+    events = [
+        {"type": "abs", "data": {"axis": "x", "value": round(x * 32767 / max(1, width - 1))}},
+        {"type": "abs", "data": {"axis": "y", "value": round(y * 32767 / max(1, height - 1))}},
+    ]
+    with QMP() as qmp:
+        qmp.execute("input-send-event", {"events": events})
+        if button:
+            for down in (True, False):
+                qmp.execute("input-send-event", {"events": [
+                    {"type": "btn", "data": {"down": down, "button": button}},
+                ]})
+
+
+def hypr_json(command):
+    result = guest(["ui-session", "hyprctl", command, "-j"],
+                   check=True, capture_output=True, text=True, timeout=15)
+    return json.loads(result.stdout)
+
+
+def layer_visible(namespace):
+    return any(
+        layer["namespace"] == namespace
+        for monitor in hypr_json("layers").values()
+        for layers in monitor["levels"].values()
+        for layer in layers
+    )
+
+
+def wait_layer(namespace):
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if layer_visible(namespace):
+            return
+        time.sleep(0.3)
+    raise RuntimeError(f"Layer did not open: {namespace}")
+
+
+def type_text(text, paste_key="ctrl-v"):
+    # wl-copy forks a clipboard owner; detach its stdio from the SSH channel.
+    guest(["bash", "-c", 'exec ui-session wl-copy -- "$1" </dev/null >/dev/null 2>&1',
+           "ui-vm", text], check=True, timeout=15)
+    key(paste_key)
+
+
+def smoke():
+    wait_desktop(180)
+    errors = guest(["ui-session", "hyprctl", "configerrors"],
+                   check=True, capture_output=True, text=True).stdout.strip()
+    if errors:
+        raise RuntimeError(f"Hyprland configuration errors:\n{errors}")
+    screenshot(STATE / "screenshots/desktop.png")
+    # Exercise actual virtual keyboard input and verify the resulting client over IPC.
+    previous = {client["address"] for client in hypr_json("clients")}
+    opened = None
+    key("super-ret")
+    try:
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            opened = next((c["address"] for c in hypr_json("clients")
+                           if c.get("class") == "kitty" and c["address"] not in previous), None)
+            if opened:
+                break
+            time.sleep(0.5)
+        else:
+            raise RuntimeError("Super+Enter did not open Kitty")
+        screenshot(STATE / "screenshots/terminal.png")
+    finally:
+        if opened:
+            guest(["ui-session", "hyprctl", "dispatch", "closewindow", f"address:{opened}"],
+                  check=True, capture_output=True)
+    key("super-w")
+    try:
+        wait_layer("rofi")
+        type_text("kitty")
+        time.sleep(0.3)
+        screenshot(STATE / "screenshots/launcher.png")
+    finally:
+        key("esc")
+        time.sleep(0.2)
+    if layer_visible("calendar-popup"):
+        raise RuntimeError("Close the existing calendar popup before running smoke")
+    pointer(640, 20, "left")
+    try:
+        wait_layer("calendar-popup")
+        screenshot(STATE / "screenshots/calendar.png")
+    finally:
+        if layer_visible("calendar-popup"):
+            pointer(640, 20, "left")
+    print(f"Smoke passed. Screenshots: {STATE / 'screenshots'}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="action", required=True)
+    for name in ("build", "status", "stop", "smoke", "paths"):
+        commands.add_parser(name)
+    starting = commands.add_parser("start")
+    starting.add_argument("--no-build", action="store_true")
+    starting.add_argument("--window", action="store_true", help="Show a local GTK window with OpenGL")
+    commands.add_parser("wait").add_argument("--timeout", type=int, default=180)
+    commands.add_parser("screenshot").add_argument("path", nargs="?", type=Path)
+    commands.add_parser("key").add_argument("chord", help="QEMU qcodes, e.g. super-ret, esc")
+    for name in ("move", "click"):
+        command = commands.add_parser(name)
+        command.add_argument("x", type=int)
+        command.add_argument("y", type=int)
+        if name == "click":
+            command.add_argument("--button", choices=["left", "middle", "right"], default="left")
+    typing = commands.add_parser("type", help="Paste UTF-8 text via the guest clipboard")
+    typing.add_argument("text")
+    typing.add_argument("--paste-key", default="ctrl-v", help="Use ctrl-shift-v in a terminal")
+    commands.add_parser("exec").add_argument("command", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    if any(c.isspace() or c == "," for c in str(STATE)) or len(str(STATE / "qmp.sock").encode()) > 100:
+        parser.error("UI_VM_STATE must be a short path without whitespace or commas (QEMU sockets/shares)")
+    if STATE == REPO or REPO in STATE.parents:
+        parser.error("UI_VM_STATE must be outside the repository")
+    marker = STATE / ".ui-vm-state"
+    if STATE.exists() and any(STATE.iterdir()) and not marker.is_file():
+        parser.error("UI_VM_STATE must be an empty directory or an existing ui-vm state directory")
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(STATE, 0o700)
+    marker.touch(mode=0o600, exist_ok=True)
+    with (STATE / "control.lock").open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("Another ui-vm command is running for this state directory")
+        if args.action == "build":
+            build()
+        elif args.action == "start":
+            start(args.no_build, args.window)
+        elif args.action == "paths":
+            print(STATE)
+        elif args.action == "status":
+            status = running()
+            print(json.dumps({"state": str(STATE), "qemu": status}, indent=2))
+            return 0 if status else 1
+        elif args.action == "wait":
+            wait_desktop(args.timeout)
+        elif args.action == "screenshot":
+            print(screenshot(args.path or STATE / "screenshots/current.png"))
+        elif args.action == "key":
+            key(args.chord)
+        elif args.action in ("move", "click"):
+            pointer(args.x, args.y, getattr(args, "button", None))
+        elif args.action == "type":
+            type_text(args.text, args.paste_key)
+        elif args.action == "exec":
+            command = args.command[1:] if args.command[:1] == ["--"] else args.command
+            if not command:
+                parser.error("exec requires a guest command")
+            return guest(command).returncode
+        elif args.action == "smoke":
+            smoke()
+        elif args.action == "stop":
+            if not running():
+                print("VM is already stopped")
+                return 0
+            with QMP() as qmp:
+                qmp.execute("system_powerdown")
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline:
+                if not running():
+                    print("VM stopped")
+                    return 0
+                time.sleep(0.5)
+            raise RuntimeError("Graceful shutdown timed out; inspect serial.log before stopping QEMU manually")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        print(f"ui-vm: {error}", file=sys.stderr)
+        sys.exit(1)

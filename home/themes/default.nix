@@ -9,7 +9,11 @@ let
   gallery = import ./gallery { inherit lib inputs; };
   galleryActive = gallery.isGallery vars.theme;
   galleryAssets =
-    if galleryActive then gallery.assetsFor { inherit pkgs; theme = vars.theme; } else null;
+    if galleryActive then gallery.assetsFor {
+      inherit pkgs;
+      theme = vars.theme;
+      gtkAccent = c.accent;
+    } else null;
 in
 {
   imports = [
@@ -28,6 +32,20 @@ in
       gtk3.extraConfig = {
         gtk-application-prefer-dark-theme = true;
       };
+      # Gallery archives have their own accent; keep it aligned with the
+      # palette used by the compositor and Base16/Qt consumers.
+      gtk3.extraCss = lib.mkAfter ''
+        @define-color theme_selected_bg_color ${c.accent};
+        @define-color theme_selected_fg_color ${c.base};
+        @define-color accent_color ${c.accent};
+        @define-color accent_bg_color ${c.accent};
+        @define-color accent_fg_color ${c.base};
+      '';
+      gtk4.extraCss = lib.mkAfter ''
+        @define-color accent_color ${c.accent};
+        @define-color accent_bg_color ${c.accent};
+        @define-color accent_fg_color ${c.base};
+      '';
       gtk4.extraConfig = {
         gtk-application-prefer-dark-theme = true;
       };

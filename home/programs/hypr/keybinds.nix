@@ -71,10 +71,10 @@ let
     { modifiers = [ "SUPER" ]; key = "J"; dispatcher = "togglesplit"; description = "Toggle split"; category = "Windows"; }
     { modifiers = [ "SUPER" ]; key = "M"; dispatcher = "exit"; description = "Exit Hyprland"; category = "System"; }
 
-    { modifiers = [ "SUPER" ]; key = "F12"; dispatcher = "exec"; argument = ''grim -g "$(slurp)" - | wl-copy''; description = "Screenshot to clipboard"; category = "Screenshots"; }
-    { modifiers = [ ]; key = "Print"; dispatcher = "exec"; argument = ''grim -g "$(slurp)" - | wl-copy''; description = "Screenshot to clipboard"; category = "Screenshots"; }
-    { modifiers = [ "SHIFT" ]; key = "Print"; dispatcher = "exec"; argument = ''grim -g "$(slurp)" ~/Pictures/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''; description = "Screenshot to file"; category = "Screenshots"; }
-    { modifiers = [ "SUPER" "CTRL" ]; key = "S"; dispatcher = "exec"; argument = ''grim -g "$(slurp)" - | swappy -f -''; description = "Screenshot editor"; category = "Screenshots"; }
+    { modifiers = [ "SUPER" ]; key = "F12"; dispatcher = "exec"; argument = "desktop-screenshot clipboard"; description = "Screenshot to clipboard"; category = "Screenshots"; }
+    { modifiers = [ ]; key = "Print"; dispatcher = "exec"; argument = "desktop-screenshot clipboard"; description = "Screenshot to clipboard"; category = "Screenshots"; }
+    { modifiers = [ "SHIFT" ]; key = "Print"; dispatcher = "exec"; argument = "desktop-screenshot file"; description = "Screenshot to file"; category = "Screenshots"; }
+    { modifiers = [ "SUPER" "CTRL" ]; key = "S"; dispatcher = "exec"; argument = "desktop-screenshot edit"; description = "Screenshot editor"; category = "Screenshots"; }
 
     { modifiers = [ "SUPER" ]; key = "B"; dispatcher = "exec"; argument = "waybar-toggle"; description = "Toggle Waybar"; category = "Waybar"; }
     { modifiers = [ "SUPER" "SHIFT" ]; key = "B"; dispatcher = "exec"; argument = "waybar-restart"; description = "Restart Waybar"; category = "Waybar"; }

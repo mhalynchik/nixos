@@ -12,7 +12,28 @@ in
 
       # Theme settings
       theme = spicePkgs.themes.catppuccin;
-      colorScheme = "mocha";
+      # Keep the Catppuccin layout, but derive every color from vars.theme.
+      customColorScheme = lib.mapAttrs (_: lib.removePrefix "#") (colors.colors // {
+        text = colors.colors.text;
+        subtext = colors.colors.subtext0;
+        main = colors.colors.base;
+        sidebar = colors.colors.mantle;
+        player = colors.colors.crust;
+        card = colors.colors.surface0;
+        shadow = colors.colors.crust;
+        selected-row = colors.colors.overlay0;
+        button = colors.colors.accent;
+        button-active = colors.colors.accent;
+        button-disabled = colors.colors.surface2;
+        tab-active = colors.colors.surface1;
+        notification = colors.colors.surface0;
+        notification-error = colors.colors.error;
+        equalizer = colors.colors.accent;
+        misc = colors.colors.surface2;
+        highlight = colors.colors.surface1;
+        main-elevated = colors.colors.surface0;
+        highlight-elevated = colors.colors.surface2;
+      });
 
       # Extensions
       enabledExtensions = with spicePkgs.extensions; [
