@@ -45,3 +45,38 @@ class WallpaperTests(unittest.TestCase):
         self.new.unlink()
         with self.assertRaises(ValueError):self.session.preview(self.ident)
         self.assertFalse(self.session.marker.exists())
+
+
+class WallpaperQueueTests(unittest.TestCase):
+    def setUp(self):
+        from wallpapers import WallpaperQueue
+        self.queue = WallpaperQueue()
+
+    def test_many_previews_coalesce_and_enter_cannot_be_displaced(self):
+        for i in range(500):
+            self.queue.put({'action':'preview','id':str(i)})
+        self.assertEqual(self.queue.pending,[{'action':'preview','id':'499'}])
+        self.queue.put({'action':'commit','id':'499'})
+        self.queue.put({'action':'preview','id':'0'})
+        self.assertEqual(self.queue.take(),{'action':'commit','id':'499'})
+        self.queue.put({'action':'preview','id':'1'})
+        self.queue.put({'action':'cancel'})
+        self.queue.finish()
+        self.assertEqual(self.queue.take(),{'action':'cancel'})
+        self.assertFalse(self.queue.pending)
+
+    def test_cancel_is_not_lost_when_a_new_session_opens(self):
+        self.queue.put({'action':'preview','id':'old'})
+        self.queue.put({'action':'cancel'})
+        self.queue.put({'action':'index'})
+        self.queue.put({'action':'preview','id':'new'})
+        self.assertEqual([x['action'] for x in self.queue.pending],['cancel','index','preview'])
+
+    def test_duplicate_thumbnails_are_bounded_and_cancel_discards_them(self):
+        message={'action':'thumbnail','id':'video'}
+        for _ in range(100):self.queue.put(message)
+        self.assertEqual(len(self.queue.pending),1)
+        self.queue.take();self.queue.put(message)
+        self.assertFalse(self.queue.pending)
+        self.queue.finish();self.queue.put(message);self.queue.put({'action':'cancel'})
+        self.assertEqual(self.queue.pending,[{'action':'cancel'}])

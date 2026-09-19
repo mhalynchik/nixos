@@ -16,6 +16,7 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     mkdir -p "$out/share/event-horizon" "$out/bin"
     cp -r . "$out/share/event-horizon/"
+    ${python3}/bin/python3 runtime/timer_sound.py "$out/share/event-horizon/sounds/timer.wav"
     makeWrapper ${quickshell}/bin/qs "$out/bin/event-horizon" \
       --prefix PATH : ${lib.makeBinPath [ python mpv cava pulseaudio hyprland glib xdg-utils systemd blueman pavucontrol networkmanagerapplet swww mpvpaper ffmpeg ]} \
       --prefix GI_TYPELIB_PATH : "${glib.out}/lib/girepository-1.0" \

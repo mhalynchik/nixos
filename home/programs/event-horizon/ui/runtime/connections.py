@@ -67,6 +67,8 @@ class Wifi:
         self.devices = {}
         self.connecting = None
         self.error = ''
+        self.scan_times = {}
+        self.scan_requested = {}
 
     def snapshot(self):
         root = self.bus.properties(NM, NM_PATH, NM)
@@ -96,6 +98,23 @@ class Wifi:
                 aps[ap] = dict(row, ssid=ssid, profile=profile)
                 networks.append(row)
         self.devices, self.aps = devices, aps
+        enabled = bool(root.get('WirelessEnabled'))
+        hardware = bool(root.get('WirelessHardwareEnabled'))
+        networking = bool(root.get('NetworkingEnabled', True))
+        ready = {path: device for path, device in devices.items()
+                 if device.get('Managed', True) and 30 <= device.get('State', 0) < 110}
+        blocked = ('Адаптер не найден' if not devices else
+                   'Wi-Fi заблокирован аппаратным переключателем' if not hardware else
+                   'Сеть отключена в NetworkManager' if not networking else
+                   'Wi-Fi выключен' if not enabled else
+                   'Адаптер не управляется NetworkManager' if not any(d.get('Managed', True) for d in devices.values()) else
+                   'Служба Wi-Fi не готова: ошибка supplicant' if not ready and any(d.get('StateReason', [0, 0])[1] == 10 for d in devices.values()) else
+                   'Адаптер Wi-Fi ещё не готов' if not ready else '')
+        for path in list(self.scan_requested):
+            started, previous = self.scan_requested[path]
+            last_scan = self.bus.properties(NM, path, NM+'.Device.Wireless').get('LastScan', -1) if path in devices else -1
+            if last_scan != previous or time.monotonic() - started > 15 or blocked:
+                self.scan_requested.pop(path, None)
         if self.connecting:
             device = devices.get(self.connecting)
             if not device or device.get('State') == 120:
@@ -107,20 +126,38 @@ class Wifi:
         unique = {}
         for row in sorted(networks, key=lambda x: (not x['connected'], -x['strength'])):
             unique.setdefault((row['name'], row['security'], row['device']), row)
-        return {'available': True, 'adapter': bool(devices), 'enabled': root.get('WirelessEnabled', False),
-            'hardwareEnabled': root.get('WirelessHardwareEnabled', False), 'networks': list(unique.values()),
+        return {'available': True, 'adapter': bool(devices), 'enabled': enabled,
+            'hardwareEnabled': hardware, 'canScan': not bool(blocked), 'blockedReason': blocked,
+            'scanning': bool(self.scan_requested), 'networks': list(unique.values()),
             'connecting': bool(self.connecting), 'error': self.error}
 
     def execute(self, message):
         action = message['action']
         self.error = ''
-        self.snapshot()
+        state = self.snapshot()
         if action == 'wifi_power':
+            if message['enabled'] and not state['hardwareEnabled']:
+                raise ValueError(state['blockedReason'])
             self.bus.set(NM, NM_PATH, NM, 'WirelessEnabled', 'b', bool(message['enabled']))
             return
         if action == 'wifi_scan':
-            for path in self.devices:
-                self.bus.call(NM, path, NM+'.Device.Wireless', 'RequestScan', '(a{sv})', ({},))
+            if not state['canScan']:
+                raise ValueError(state['blockedReason'])
+            failures = []
+            for path, device in self.devices.items():
+                if not device.get('Managed', True) or not 30 <= device.get('State', 0) < 110:
+                    continue
+                if time.monotonic() - self.scan_times.get(path, -30) < 10:
+                    continue
+                previous = self.bus.properties(NM, path, NM+'.Device.Wireless').get('LastScan', -1)
+                try:
+                    self.bus.call(NM, path, NM+'.Device.Wireless', 'RequestScan', '(a{sv})', ({},))
+                    self.scan_times[path] = time.monotonic()
+                    self.scan_requested[path] = (time.monotonic(), previous)
+                except Exception as error:
+                    failures.append(str(error))
+            if failures and not self.scan_requested:
+                raise RuntimeError('Не удалось обновить сети. ' + failures[0])
             return
         row = self.aps.get(message.get('id'))
         if row is None:

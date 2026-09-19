@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 
-# Flake в git-репо видит только закоммиченные файлы.
+# Trust only the explicitly selected deploy target, for this Git invocation.
+# Never persist safe.directory=* or depend on sudo preserving Git configuration.
+target_git() {
+  local target="${1:?}"
+  shift
+  target="$(cd "$target" && pwd -P)" || return
+  git -c "safe.directory=$target" -C "$target" "$@"
+}
+
+# Git flakes include tracked files; the local commits also retain deploy history.
 ensure_target_git() {
   local target="${1:?}"
   if [[ -d "$target/.git" ]]; then
@@ -11,7 +20,7 @@ ensure_target_git() {
     return 0
   fi
   echo "Инициализация git в $target (нужно для flake)"
-  git -C "$target" init -b main
+  target_git "$target" init -b main
   if [[ ! -f "$target/.gitignore" && -f "$target/hosts/gitignore.local.example" ]]; then
     cp "$target/hosts/gitignore.local.example" "$target/.gitignore"
   fi
@@ -31,27 +40,27 @@ commit_local_config_in_git() {
     cp "$target/hosts/gitignore.local.example" "$target/.gitignore"
   fi
 
-  git -C "$target" add -A
+  target_git "$target" add -A
 
   for f in vars.nix hardware-configuration.nix; do
     if [[ -f "$target/$f" ]]; then
-      git -C "$target" add -f "$f" 2>/dev/null || true
+      target_git "$target" add -f "$f" 2>/dev/null || true
     fi
   done
 
-  if git -C "$target" diff --cached --quiet; then
+  if target_git "$target" diff --cached --quiet; then
     echo "Нет изменений для коммита в $target"
     return 0
   fi
 
-  if ! git -C "$target" config user.email >/dev/null 2>&1; then
-    git -C "$target" config user.email "nixos-config@local"
+  if ! target_git "$target" config user.email >/dev/null 2>&1; then
+    target_git "$target" config user.email "nixos-config@local"
   fi
-  if ! git -C "$target" config user.name >/dev/null 2>&1; then
-    git -C "$target" config user.name "nixos-config"
+  if ! target_git "$target" config user.name >/dev/null 2>&1; then
+    target_git "$target" config user.name "nixos-config"
   fi
 
-  git -C "$target" commit -m "$message"
+  target_git "$target" commit -m "$message"
   echo "Коммит в $target: $message"
 }
 
@@ -70,7 +79,8 @@ commit_message_after_deploy() {
 rebuild_flake() {
   local target="${1:?}"
   local action="${2:?}"
-  sudo nixos-rebuild "$action" --flake "$target#default" --impure
+  target="$(cd "$target" && pwd -P)" || return
+  sudo nixos-rebuild "$action" --flake "path:$target#default" --impure
 }
 
 install_flake() {
@@ -81,7 +91,8 @@ install_flake() {
     exit 1
   fi
   echo "Установка на /mnt через nixos-install..."
-  sudo nixos-install --flake "$target#default" --impure
+  target="$(cd "$target" && pwd -P)" || return
+  sudo nixos-install --flake "path:$target#default" --impure
 }
 
 prompt_setup_mode() {
@@ -115,4 +126,3 @@ hint_install_iso() {
     exit 1
   fi
 }
-

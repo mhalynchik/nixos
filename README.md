@@ -33,7 +33,9 @@
 - `~/nixos-config` — общий конфиг, синхронизация с GitHub, `vars.nix` в `.gitignore`
 - `/etc/nixos` — рабочая копия на машине, может иметь **локальный git** для своих коммитов
 
-**Flake и vars.nix:** если `/etc/nixos` — git repo, flake видит только **закоммиченные** файлы. Wizard инициализирует git в `/etc/nixos` (если нет), затем `git add` + `git commit`. В GitHub секреты не попадают — remote только у `~/nixos-config`.
+Локальные операции Git при обновлении доверяют только выбранному deploy-каталогу и только на время команды. Глобальный `safe.directory` не меняется; `safe.directory=*` не нужен. Это устраняет `detected dubious ownership` при разных владельцах `/etc/nixos` и запускающего пользователя. Права записи на каталог по-прежнему необходимы.
+
+**Flake и vars.nix:** Git-flake видит отслеживаемые файлы. `./bin/update` и `./bin/setup` собирают явный `path:`-flake, включая локальные `vars.nix` и `hardware-configuration.nix`, независимо от владельца `.git`. Wizard инициализирует git в `/etc/nixos` (если нет), затем `git add` + `git commit`. В GitHub секреты не попадают — remote только у `~/nixos-config`.
 
 **Сборка из `~/nixos-config`:** `vars.nix` и `hardware-configuration.nix` в `.gitignore`, поэтому для eval/build укажите каталог с этими файлами:
 

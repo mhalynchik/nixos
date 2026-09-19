@@ -179,7 +179,10 @@ class Session:
    log.close()
   self.pending=remaining
   self.audio=audio_snapshot();self.desktop=desktop_snapshot()
-  if self.store.timer_tick():self.event={'kind':'timer_finished'};self.serial+=1
+  if self.store.timer_tick():
+   self.event={'kind':'timer_finished'};self.serial+=1
+   try:self.launch(['paplay','--client-name=Event Horizon','--stream-name=Timer',str(BASE/'sounds/timer.wav')])
+   except OSError as error:self.error=str(error)[:350]
 
 def main():
  session=Session();last=0;pending=b''

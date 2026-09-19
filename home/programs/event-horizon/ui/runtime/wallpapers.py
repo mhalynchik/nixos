@@ -14,6 +14,38 @@ STATIC = {'.png', '.jpg', '.jpeg', '.webp', '.avif', '.bmp'}
 ANIMATED = {'.gif', '.mp4', '.webm', '.mkv', '.mov'}
 
 
+class WallpaperQueue:
+    """Coalesce hover work without ever replacing an accepted Enter command."""
+    def __init__(self):
+        self.pending = []
+        self.active = None
+
+    def put(self, message):
+        action = message['action']
+        if action == 'preview':
+            if self.active and self.active['action'] == 'commit' or any(x['action'] == 'commit' for x in self.pending):
+                return
+            self.pending = [x for x in self.pending if x['action'] != 'preview']
+            # A cancel restores the previous session before the next preview.
+            position = next((i for i, x in enumerate(self.pending) if x['action'] not in ['cancel', 'index']), len(self.pending))
+            self.pending.insert(position, message)
+        elif action in ['cancel', 'commit']:
+            self.pending = [x for x in self.pending if x['action'] not in ['preview', 'thumbnail']]
+            if action == 'commit' and (self.active and self.active['action'] == 'commit' or any(x['action'] == 'commit' for x in self.pending)):
+                return
+            if not self.pending or self.pending[-1] != message:
+                self.pending.append(message)
+        elif message != self.active and message not in self.pending:
+            self.pending.append(message)
+
+    def take(self):
+        self.active = self.pending.pop(0)
+        return self.active
+
+    def finish(self):
+        self.active = None
+
+
 def catalogue(config):
     items = []
     seen = set()
@@ -161,7 +193,7 @@ def main():
         session.restore()
         return
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future, queued, buffer = None, [], b''
+    future, queue, buffer = None, WallpaperQueue(), b''
     alive = True
     def stop(*args):
         nonlocal alive
@@ -185,19 +217,16 @@ def main():
                     action = message.get('action')
                     if action not in ['index', 'thumbnail', 'preview', 'cancel', 'commit']:
                         continue
-                    if action in ['preview', 'cancel', 'commit']:
-                        queued = [x for x in queued if x['action'] not in ['preview', 'cancel', 'commit']]
-                        queued.insert(0, message)
-                    else:
-                        queued.append(message)
+                    queue.put(message)
             if future and future.done():
                 try:
                     print(json.dumps(future.result(), ensure_ascii=False), flush=True)
                 except Exception as error:
                     print(json.dumps({'error': str(error)[:400]}), flush=True)
                 future = None
-            if future is None and queued:
-                message = queued.pop(0)
+                queue.finish()
+            if future is None and queue.pending:
+                message = queue.take()
                 action = message['action']
                 function = {'index': session.index, 'thumbnail': session.thumbnail, 'preview': session.preview,
                             'cancel': session.restore, 'commit': session.commit}[action]

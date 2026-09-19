@@ -38,7 +38,7 @@ ShellRoot {
  property var telemetry:({cpu:0,ram:0,processCount:0,top:[],history:[]})
  property color accent:'#72e7bc'
  Behavior on orbitAngle{NumberAnimation{duration:420;easing.type:Easing.InOutCubic}}
- onPageChanged:{arrive.restart();focusPage();if(page==='wifi'&&radios.wifi?.enabled)radioCommand('wifi_scan');if(page==='bluetooth'&&radios.bluetooth?.enabled)radioCommand('bt_scan');if(page!=='bluetooth'&&(radios.bluetooth?.scanning||radios.bluetooth?.pairing?.length))radioCommand('radio_idle');if(page!=='wallpapers'&&page!=='animated')wallpaperCommand('cancel')}
+ onPageChanged:{arrive.restart();focusPage();if(page==='wifi'&&radios.wifi?.canScan)radioCommand('wifi_scan');if(page==='bluetooth'&&radios.bluetooth?.enabled)radioCommand('bt_scan');if(page!=='bluetooth'&&(radios.bluetooth?.scanning||radios.bluetooth?.pairing?.length))radioCommand('radio_idle');if(page!=='wallpapers'&&page!=='animated')wallpaperCommand('cancel')}
  NumberAnimation{id:arrive;target:root;property:'arrival';from:0;to:1;duration:280;easing.type:Easing.OutCubic}
  FontLoader{source:'fonts/forestsmooth.ttf'}
  FontLoader{source:'fonts/sansation.ttf'}
@@ -115,7 +115,7 @@ ShellRoot {
  function focusPage(){Qt.callLater(()=>{overlayFocus.forceActiveFocus();if(extraPanel.item&&extraPanel.item.focusFirst)extraPanel.item.focusFirst();else if(page==='media')audioPanel.focusFirst();else if(page==='wifi'||page==='bluetooth')connectionPanel.focusFirst()})}
  function open(p){if(opened&&page===p&&heldScreen===Hyprland.focusedMonitor?.name){opened=false;return}heldScreen=Hyprland.focusedMonitor?.name||selectedScreen?.name||'';page=p;opened=true;arrive.restart();focusPage()}
  function navPosition(i){let a=(i*90+orbitAngle)*Math.PI/180;return {x:panel.x+(310+238*Math.cos(a))*panel.scale,y:panel.y+(355+238*Math.sin(a))*panel.scale}}
- function status(){return JSON.stringify({opened:opened,opening:opening,closing:closing,page:page,reveal:reveal,timing:{open:supernova.duration,close:collapse.duration},screen:selectedScreen?.name,scale:panel.scale,panel:{x:panel.x,y:panel.y,width:panel.width*panel.scale,height:panel.height*panel.scale},nav:pages.map((p,i)=>({page:p,point:navPosition(i)})),audio:audio,nativePlayer:nativePlayer?.identity,session:session,animation:{menu:menuPhase,desktop:desktopPhase,desktopVisible:desktopVisible,fullscreen:fullscreen,reducedMotion:reducedMotion},toast:toastVisible,selectedDate:selectedDate,radios:radios,wallpapers:wallpapers,bar:{width:statusBar.width,contentWidth:statusRow.implicitWidth,scale:statusRow.scale},calendar:{month:calendar.month,year:calendar.year,selected:calendar.selectedDay}})}
+ function status(){return JSON.stringify({opened:opened,opening:opening,closing:closing,page:page,reveal:reveal,timing:{open:supernova.duration,close:collapse.duration},screen:selectedScreen?.name,scale:panel.scale,panel:{x:panel.x,y:panel.y,width:panel.width*panel.scale,height:panel.height*panel.scale},nav:pages.map((p,i)=>({page:p,point:navPosition(i)})),audio:audio,nativePlayer:nativePlayer?.identity,session:session,animation:{menu:menuPhase,desktop:desktopPhase,desktopVisible:desktopVisible,fullscreen:fullscreen,reducedMotion:reducedMotion},toast:toastVisible,selectedDate:selectedDate,radios:radios,wallpapers:wallpapers,bar:{width:statusBar.width,contentWidth:statusRow.implicitWidth,scale:statusRow.scale},mediaControls:{x:desktopControls.x+93,y:desktopControls.y+848,scale:desktopStage.scale},calendar:{month:calendar.month,year:calendar.year,selected:calendar.selectedDay}})}
  IpcHandler{target:'design'
   function open(section:string):void{root.open(section)}
   function close():void{root.opened=false}
@@ -130,7 +130,7 @@ ShellRoot {
  component Heading:Text{textFormat:Text.PlainText;font.family:'ForestSmooth';font.pixelSize:35;color:'#e5fff2'}
  component Star:Text{text:'✦';font.family:'Sansation';font.pixelSize:20;color:root.accent}
  component Controls:Row{
-  spacing:12
+  spacing:12;enabled:root.mediaAvailable;opacity:enabled?1:.4
   MotionButton{y:8;label:'󰒮';glyph:true;textSize:24;onTriggered:root.send('previous')}
   MotionButton{label:root.audio.playing?'󰏤':'󰐊';primary:true;glyph:true;textSize:29;onTriggered:root.send('play')}
   MotionButton{y:8;label:'󰓛';glyph:true;textSize:22;onTriggered:root.send('stop')}
@@ -146,7 +146,7 @@ ShellRoot {
  PanelWindow{
   screen:root.selectedScreen
   anchors{top:true;bottom:true;left:true;right:true}color:'transparent';exclusionMode:ExclusionMode.Ignore
-  WlrLayershell.layer:WlrLayer.Bottom;WlrLayershell.namespace:'emerald-desktop';WlrLayershell.keyboardFocus:WlrKeyboardFocus.OnDemand;mask:Region{item:calendar}
+  WlrLayershell.layer:WlrLayer.Bottom;WlrLayershell.namespace:'emerald-desktop';WlrLayershell.keyboardFocus:WlrKeyboardFocus.OnDemand;mask:Region{regions:[Region{item:calendar},Region{item:desktopControls}]}
   Item{id:desktopStage;width:2560;height:1440;scale:Math.min(parent.width/2560,parent.height/1440);transformOrigin:Item.TopLeft
   Item{x:105;y:142;width:570;height:215
    Text{text:Qt.formatTime(root.now,'HH:mm');font.family:'Sansation';font.pixelSize:110;font.weight:Font.Light; font.letterSpacing:-5;color:'#e0ffef'}
@@ -157,7 +157,9 @@ ShellRoot {
   CalendarWidget{id:calendar;x:106;y:400;today:root.now;phase:root.desktopPhase;timer:root.session.timer;surge:root.timerPulse;agenda:root.session.agenda;reducedMotion:root.reducedMotion;onDateActivated:date=>{root.selectedDate=date;root.open('agenda')};onTimerActivated:root.open('timer')}
   Item{x:93;y:848;width:620;height:200;opacity:root.opened?.4:1;Behavior on opacity{NumberAnimation{duration:250}}
    Gravity{x:0;y:0;width:170;height:170;phase:root.desktopPhase;mini:true;bands:root.audio.bands;playing:root.audio.playing}
-   Heading{x:190;y:68;text:root.audio.title;font.pixelSize:29}
+   Heading{x:190;y:30;width:425;text:root.audio.title;font.pixelSize:29;elide:Text.ElideRight}
+   Muted{x:192;y:74;width:420;text:root.mediaArtist;elide:Text.ElideRight}
+   Controls{id:desktopControls;objectName:'desktopMediaControls';x:190;y:103}
   }
   }
  }
@@ -168,6 +170,7 @@ ShellRoot {
   Rectangle{anchors.fill:parent;radius:18;color:'#b30b201a';border.width:1;border.color:'#6075c9a9'
    Row{id:statusRow;x:8;y:4;spacing:6;scale:Math.min(1,(statusBar.width-16)/implicitWidth);transformOrigin:Item.TopLeft
     MotionButton{width:36;height:28;label:root.audio.playing?'󰏤':'󰐊';glyph:true;textSize:17;onTriggered:root.send('play')}
+    MotionButton{objectName:'barNext';width:30;height:28;label:'󰒭';glyph:true;textSize:17;enabled:root.previewAudio||!!root.nativePlayer?.canGoNext;opacity:enabled?1:.4;onTriggered:root.send('next')}
     MotionButton{width:162;height:28;label:root.audio.title.length>20?root.audio.title.slice(0,19)+'…':root.audio.title;textSize:11;onTriggered:root.open('media')}
     MotionButton{width:67;height:28;label:Math.round(root.defaultSink.volume)+'%';textSize:11;onTriggered:root.open('media');MouseArea{anchors.fill:parent;acceptedButtons:Qt.NoButton;onWheel:w=>{root.command('quick_volume',{delta:w.angleDelta.y>0?5:-5});w.accepted=true}}}
     MotionButton{width:58;height:28;label:root.defaultSource.mute?'Mic ×':'Mic';selected:root.defaultSource.mute;textSize:11;onTriggered:root.command('mic_mute')}

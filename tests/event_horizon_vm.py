@@ -119,10 +119,13 @@ class EventHorizonIntegration(unittest.TestCase):
         for kind in ['wifi', 'bluetooth']:
             ipc('open', kind)
             eventually(lambda: status()['opened'] and not status()['opening'])
-            state = eventually(lambda: status()['radios'][kind])
+            state = eventually(lambda: (value if (value := status()['radios'][kind]).get('available') else None))
             self.assertTrue(state['available'], state)
             self.assertIn('adapter', state)
-            self.assertEqual(previous, {c['address'] for c in clients()})
+            # Unrelated autostart apps may appear while the VM finishes booting.
+            external_settings = [c for c in clients() if c['address'] not in previous and
+                any(name in c['class'].lower() for name in ['blueman', 'nm-connection-editor', 'nm-applet'])]
+            self.assertEqual(external_settings, [])
             vm['screenshot'](self.evidence / (kind + '-verified.png'))
 
     def test_06_wallpaper_choice_survives_activation(self):
@@ -213,6 +216,22 @@ class EventHorizonIntegration(unittest.TestCase):
             eventually(lambda:status().get('nativePlayer')=='MPRIS integration')
             self.assertTrue(status()['audio']['playing'])
             self.assertIn('Emerald',status()['audio']['title'])
+            ipc('close');eventually(lambda:not status()['closing'])
+            guest('ui-session','hyprctl','dispatch','workspace','9')
+            eventually(lambda:status()['animation']['desktopVisible'])
+            controls=status()['mediaControls'];scale=controls['scale']
+            def click_control(x):
+                vm['pointer'](int((controls['x']+x)*scale),int((controls['y']+30)*scale),'left')
+            click_control(86);eventually(lambda:not status()['audio']['playing'])
+            click_control(86);eventually(lambda:status()['audio']['playing'])
+            click_control(206);eventually(lambda:status()['audio']['title'].startswith('Next'))
+            click_control(22);eventually(lambda:status()['audio']['title'].startswith('Previous'))
+            click_control(150);eventually(lambda:not status()['audio']['playing'])
+            click_control(86);eventually(lambda:status()['audio']['playing'])
+            bar=status()['bar']
+            vm['pointer'](int(2560-6-bar['width']+8+57*bar['scale']),int(8+14*bar['scale']),'left')
+            eventually(lambda:status()['audio']['title'].startswith('Next'))
+            vm['screenshot'](self.evidence/'desktop-media-controls.png')
         finally:
             guest('systemctl','--user','stop','eh-mpris-test')
         eventually(lambda:status().get('nativePlayer') is None)
@@ -230,6 +249,49 @@ class EventHorizonIntegration(unittest.TestCase):
         finally:
             if opened:guest('ui-session','hyprctl','dispatch','closewindow','address:'+opened)
             guest('rm','-f','/tmp/eh-clipboard-result')
+
+
+    def test_12_long_wallpaper_selection_and_enter(self):
+        original=guest('readlink','-f','/home/ui/.local/state/current-wallpaper').stdout.strip()
+        try:
+            guest('sh','-c','mkdir -p ~/Pictures/animated; ffmpeg -v error -y -f lavfi -i color=c=0x153b2c:s=640x360:r=15 -t 2 -threads 1 ~/Pictures/animated/stress-a.mp4; cp ~/Pictures/animated/stress-a.mp4 ~/Pictures/animated/stress-b.mp4')
+            guest('ui-session','hyprctl','dispatch','workspace','9')
+            for kind in ['wallpapers','animated']:
+                ipc('open',kind);eventually(lambda:status()['opened'] and not status()['opening'])
+                eventually(lambda:len([x for x in status()['wallpapers']['items'] if x['kind']==('static' if kind=='wallpapers' else 'animated')])>=2)
+                # Move the pointer outside the gallery so keyboard focus stays put.
+                vm['pointer'](1900,1100)
+                for i in range(80):
+                    vm['key']('right' if i%2==0 else 'left');time.sleep(.30)
+                vm['key']('right');time.sleep(.6)
+                preview=eventually(lambda:status()['wallpapers'].get('preview'))
+                chosen=next(x['path'] for x in status()['wallpapers']['items'] if x['id']==preview)
+                vm['key']('ret')
+                eventually(lambda:not status()['opened'],30)
+                self.assertEqual(guest('readlink','-f','/home/ui/.local/state/current-wallpaper').stdout.strip(),chosen)
+                self.assertFalse(status()['wallpapers'].get('error'))
+                eventually(lambda:not status()['closing'])
+            self.assertEqual(guest('systemctl','--user','show','event-horizon','-p','NRestarts','--value').stdout.strip(),'0')
+        finally:
+            ipc('close');guest('ui-session','wallpaper-set',original)
+            guest('rm','-f','/home/ui/Pictures/animated/stress-a.mp4','/home/ui/Pictures/animated/stress-b.mp4')
+
+    def test_13_timer_sound_reaches_audio_output(self):
+        import struct
+        import wave
+        capture=vm['STATE']/'control/timer-capture.wav'
+        guest('systemd-run','--user','--unit=eh-timer-capture','ui-session','parec','--device=@DEFAULT_MONITOR@','--format=s16le','--rate=24000','--channels=1','--file-format=wav','/mnt/ui-vm-control/timer-capture.wav')
+        try:
+            time.sleep(.5);command('timer_start',seconds=1)
+            eventually(lambda:status()['session']['timer']['status']=='finished')
+            time.sleep(4)
+        finally:
+            guest('systemctl','--user','stop','eh-timer-capture')
+            command('timer_reset')
+        with wave.open(str(capture)) as sound:
+            samples=struct.unpack('<'+'h'*sound.getnframes(),sound.readframes(sound.getnframes()))
+            self.assertGreater(max(map(abs,samples)),500)
+        shutil.copyfile(capture,self.evidence/'timer-output.wav')
 
 
 if __name__ == '__main__':

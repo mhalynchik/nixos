@@ -65,3 +65,27 @@ class RadioTests(unittest.TestCase):
         bt.respond({'accept':False})
         self.assertIsNone(bt.request)
         self.assertEqual(bt.bus.calls[-1][0][3],'CancelPairing')
+
+    def test_disabled_or_unavailable_wifi_never_requests_scan(self):
+        for override in [{'WirelessEnabled':False},{'WirelessHardwareEnabled':False},{'NetworkingEnabled':False}]:
+            bus=Bus();bus.props[NM_PATH].update(override);wifi=Wifi(bus)
+            self.assertFalse(wifi.snapshot()['canScan'])
+            with self.assertRaisesRegex(ValueError,'Wi-Fi|Сеть'):wifi.execute({'action':'wifi_scan'})
+            self.assertEqual(bus.calls,[])
+        bus=Bus();bus.props['/wifi']['State']=20;wifi=Wifi(bus)
+        with self.assertRaisesRegex(ValueError,'не готов'):wifi.execute({'action':'wifi_scan'})
+        self.assertEqual(bus.calls,[])
+
+    def test_scan_skips_unavailable_second_adapter_and_throttles_repeats(self):
+        bus=Bus();bus.props[NM_PATH]['Devices'].append('/wifi2')
+        bus.props['/wifi2']={'DeviceType':2,'State':20};wifi=Wifi(bus)
+        wifi.execute({'action':'wifi_scan'});wifi.execute({'action':'wifi_scan'})
+        self.assertEqual(len(bus.calls),1);self.assertEqual(bus.calls[0][0][1],'/wifi')
+        self.assertTrue(wifi.snapshot()['scanning'])
+        bus.props['/wireless']['LastScan']=123
+        self.assertFalse(wifi.snapshot()['scanning'])
+
+    def test_hardware_block_does_not_claim_enable_success(self):
+        bus=Bus();bus.props[NM_PATH]['WirelessHardwareEnabled']=False;wifi=Wifi(bus)
+        with self.assertRaisesRegex(ValueError,'аппаратным'):wifi.execute({'action':'wifi_power','enabled':True})
+        self.assertEqual(bus.calls,[])

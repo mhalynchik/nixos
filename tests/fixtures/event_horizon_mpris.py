@@ -25,6 +25,12 @@ def call(connection,sender,path,interface,method,parameters,invocation):
         properties[player]['PlaybackStatus']=('s',value)
         connection.emit_signal(None,path,'org.freedesktop.DBus.Properties','PropertiesChanged',
             GLib.Variant('(sa{sv}as)',(player,{'PlaybackStatus':GLib.Variant('s',value)},[])))
+    if method in ['Next','Previous']:
+        metadata=properties[player]['Metadata'][1]
+        old=metadata['xesam:title'].unpack()
+        metadata['xesam:title']=GLib.Variant('s',method+' · '+old)
+        connection.emit_signal(None,path,'org.freedesktop.DBus.Properties','PropertiesChanged',
+            GLib.Variant('(sa{sv}as)',(player,{'Metadata':GLib.Variant('a{sv}',metadata)},[])))
     invocation.return_value(None)
 
 
