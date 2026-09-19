@@ -1,14 +1,17 @@
 { pkgs, lib, vars, ... }:
 
 # Официальный ChatGPT desktop (.deb). nixpkgs.chatgpt — только Darwin.
-# Обновление: новый hash у latest URL + version из `dpkg-deb -f`.
+# Pin the versioned repository artifact: the /latest/ URL changes in place.
+# Updates: read Version, Filename and SHA256 from the official APT Packages index:
+# https://persistent.oaistatic.com/codex-app-prod/linux/deb/dists/stable/main/binary-amd64/Packages
 let
+  version = "26.908.70816";
   chatgpt = pkgs.stdenv.mkDerivation {
     pname = "chatgpt";
-    version = "26.908.70816";
+    inherit version;
 
     src = pkgs.fetchurl {
-      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
+      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_${version}_amd64.deb";
       hash = "sha256-EO0MGogLmXXR8YW/eRGn9RTga5hjzU7ZVh1ABjYXyFQ=";
     };
 
