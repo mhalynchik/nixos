@@ -60,9 +60,9 @@ let
     { modifiers = [ "SUPER" ]; key = "E"; dispatcher = "exec"; argument = "$fileManager"; description = "File manager"; category = "Applications"; }
     { modifiers = [ "SUPER" ]; key = "L"; dispatcher = "exec"; argument = "$browser"; description = "Browser"; category = "Applications"; }
     { modifiers = [ "SUPER" ]; key = "R"; dispatcher = "exec"; argument = "$menu"; description = "App menu"; category = "Applications"; }
-    { modifiers = [ "SUPER" ]; key = "W"; dispatcher = "exec"; argument = "rofi -show drun -show-icons"; description = "App launcher"; category = "Applications"; }
+    { modifiers = [ "SUPER" ]; key = "W"; dispatcher = "exec"; argument = "$menu"; description = "App launcher"; category = "Applications"; }
     { modifiers = [ "SUPER" ]; key = "G"; dispatcher = "exec"; argument = "rofi -modi games -show games -show-icons -theme games"; description = "Games menu"; category = "Applications"; }
-    { modifiers = [ "SUPER" ]; key = "A"; dispatcher = "exec"; argument = "nwg-drawer"; description = "App drawer"; category = "Applications"; }
+    { modifiers = [ "SUPER" ]; key = "A"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "$menu" else "nwg-drawer"; description = "App drawer"; category = "Applications"; }
 
     { modifiers = [ "SUPER" ]; key = "Q"; dispatcher = "killactive"; description = "Close window"; category = "Windows"; }
     { modifiers = [ "SUPER" ]; key = "V"; dispatcher = "togglefloating"; description = "Toggle floating"; category = "Windows"; }
@@ -79,8 +79,8 @@ let
     { modifiers = [ "SUPER" ]; key = "B"; dispatcher = "exec"; argument = "waybar-toggle"; description = "Toggle Waybar"; category = "Waybar"; }
     { modifiers = [ "SUPER" "SHIFT" ]; key = "B"; dispatcher = "exec"; argument = "waybar-restart"; description = "Restart Waybar"; category = "Waybar"; }
 
-    { modifiers = [ "SUPER" "SHIFT" ]; key = "W"; dispatcher = "exec"; argument = "wallpaper-picker"; description = "Wallpaper picker"; category = "Wallpaper"; }
-    { modifiers = [ "SUPER" "ALT" ]; key = "W"; dispatcher = "exec"; argument = "wallpaper-animated"; description = "Animated wallpaper"; category = "Wallpaper"; }
+    { modifiers = [ "SUPER" "SHIFT" ]; key = "W"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "event-horizon ipc call design open wallpapers" else "wallpaper-picker"; description = "Wallpaper picker"; category = "Wallpaper"; }
+    { modifiers = [ "SUPER" "ALT" ]; key = "W"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "event-horizon ipc call design open animated" else "wallpaper-animated"; description = "Animated wallpaper"; category = "Wallpaper"; }
 
     { modifiers = [ "SUPER" "SHIFT" ]; key = "C"; dispatcher = "exec"; argument = "hyprpicker -a"; description = "Color picker"; category = "Tools"; }
     { modifiers = [ "SUPER" "ALT" ]; key = "equal"; dispatcher = "exec"; argument = "opacity-increase"; description = "Increase opacity"; category = "Windows"; }
@@ -96,8 +96,8 @@ let
     { modifiers = [ "SUPER" "ALT" ]; key = "S"; dispatcher = "exec"; argument = "rofi-websearch"; description = "Web search"; category = "Tools"; }
     { modifiers = [ "SUPER" "ALT" ]; key = "C"; dispatcher = "exec"; argument = "rofi-calc"; description = "Calculator"; category = "Tools"; }
 
-    { modifiers = [ "SUPER" ]; key = "N"; dispatcher = "exec"; argument = "swaync-client -t -sw"; description = "Toggle notifications"; category = "Notifications"; }
-    { modifiers = [ "SUPER" "SHIFT" ]; key = "N"; dispatcher = "exec"; argument = "swaync-client -d -sw"; description = "Clear notifications"; category = "Notifications"; }
+    { modifiers = [ "SUPER" ]; key = "N"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "event-horizon ipc call design open notifications" else "swaync-client -t -sw"; description = "Toggle notifications"; category = "Notifications"; }
+    { modifiers = [ "SUPER" "SHIFT" ]; key = "N"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "event-horizon ipc call design clearNotifications" else "swaync-client -d -sw"; description = "Clear notifications"; category = "Notifications"; }
 
     { modifiers = [ "SUPER" ]; key = "left"; dispatcher = "movefocus"; argument = "l"; description = "Focus left"; category = "Focus"; }
     { modifiers = [ "SUPER" ]; key = "right"; dispatcher = "movefocus"; argument = "r"; description = "Focus right"; category = "Focus"; }

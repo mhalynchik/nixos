@@ -14,6 +14,8 @@ mkdir -p "$TARGET"
 rsync -a --delete --no-owner --no-group \
   --exclude='.git/' \
   --exclude='.gitignore' \
+  --exclude='__pycache__/' \
+  --exclude='*.pyc' \
   --exclude='vars.nix' \
   --exclude='hardware-configuration.nix' \
   --exclude='result' \

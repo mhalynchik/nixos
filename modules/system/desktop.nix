@@ -2,7 +2,11 @@
 
 {
   services.greetd.enable = true;
-  services.greetd.settings.default_session.command = "dbus-run-session Hyprland";
+  services.greetd.settings.default_session.command = "${pkgs.writeShellScript "start-hyprland" ''
+    # Desktop applications and systemd user services must share one session bus.
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(${pkgs.coreutils}/bin/id -u)/bus"
+    exec /run/current-system/sw/bin/Hyprland
+  ''}";
   services.greetd.settings.default_session.user = vars.username;
 
   programs.hyprland.enable = true;

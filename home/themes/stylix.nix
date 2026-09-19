@@ -41,8 +41,11 @@ in
         name = "JetBrainsMono Nerd Font";
       };
       sansSerif = {
-        package = pkgs.inter;
-        name = "Inter";
+        package = if vars.programs.eventHorizon or false then pkgs.runCommand "sansation-fonts" {} ''
+          mkdir -p $out/share/fonts/truetype
+          cp ${../programs/event-horizon/ui/fonts}/sansation*.ttf $out/share/fonts/truetype/
+        '' else pkgs.inter;
+        name = colors.fonts.sans;
       };
       serif = {
         package = pkgs.noto-fonts;

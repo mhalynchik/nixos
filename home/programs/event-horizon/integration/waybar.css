@@ -1,0 +1,12 @@
+* { font-family:"Sansation", "JetBrainsMono Nerd Font"; font-size:12px; font-weight:500; min-height:0; border:none; }
+window#waybar { background:transparent; color:#dcebe2; }
+#left,#right { background:rgba(15,29,23,0.70); border:1px solid rgba(132,178,148,0.35); border-radius:12px; padding:0 8px; }
+#workspaces button { background:transparent; color:#a8c0b1; border-radius:12px; padding:0 10px; margin:4px 1px; }
+#workspaces button.active { color:#0f2419; background:#63d7ad; }
+#workspaces button:hover { background:#345543; color:#e7fff0; }
+#custom-launcher { color:#63d7ad; font-size:19px; padding:0 10px 0 3px; }
+#custom-wifi,#custom-bluetooth,#custom-stats,#pulseaudio,#language { padding:0 12px; }
+#custom-wifi,#custom-bluetooth,#custom-stats { font-size:16px; }
+tooltip { background:#16261c; color:#e7eee9; border-radius:8px; }
+
+#tray { padding:0 8px; }

@@ -53,7 +53,7 @@ let
       ext="''${target##*.}"
       ext_lower=$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')
       case "$ext_lower" in
-        gif|mp4|webm|mkv) ;;
+        gif|mp4|webm|mkv|mov) ;;
         *) exit 3 ;;
       esac
       exec mpvpaper -o "${mpvOpts}" '*' "$target"
@@ -119,7 +119,7 @@ let
 
       is_video=false
       case "$ext_lower" in
-        mp4|webm|mkv|gif) is_video=true ;;
+        mp4|webm|mkv|gif|mov) is_video=true ;;
       esac
 
       # Atomically repoint current-wallpaper at the new file. Use a real unique
@@ -222,6 +222,11 @@ let
     runtimeInputs = wallpaperRuntimeInputs;
     text = ''
       set -euo pipefail
+      ${pkgs.lib.optionalString (vars.programs.eventHorizon or false) ''
+        if [ -f "${desktopSymlink}" ]; then
+          exec wallpaper-set "$(readlink -f "${desktopSymlink}")"
+        fi
+      ''}
       if wallpaper-animated; then
         exit 0
       fi

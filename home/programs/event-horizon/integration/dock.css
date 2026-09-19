@@ -1,0 +1,8 @@
+* { font-family: "Sansation"; color: #d9f4e8; }
+window { background: rgba(10, 32, 26, 0.70); border: 1px solid rgba(115, 218, 177, 0.45); border-radius: 22px; padding: 4px; }
+#box { padding: 3px 8px; }
+button { background: transparent; border: 1px solid transparent; border-radius: 17px; padding: 5px; margin: 2px; transition: all 180ms ease-out; }
+button:hover { background: rgba(84, 199, 150, 0.25); border-color: rgba(143, 245, 195, 0.5); }
+button:focus { background: rgba(84, 199, 150, 0.16); box-shadow: none; }
+image { padding: 4px; }
+tooltip { background: rgba(10, 32, 26, 0.94); border-radius: 12px; }

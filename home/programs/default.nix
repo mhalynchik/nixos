@@ -8,13 +8,13 @@
       ./bash
       ./hypr
       ./rofi
-      ./waybar
       ./wlogout
-      ./swaync
       ./swayosd
       ./clipboard
     ]
-    ++ lib.optionals vars.programs.ags [ ./ags ]
+    ++ lib.optionals (vars.programs.eventHorizon or false) [ ./event-horizon ]
+    ++ lib.optionals (!(vars.programs.eventHorizon or false)) [ ./waybar ./swaync ]
+    ++ lib.optionals (vars.programs.ags && !(vars.programs.eventHorizon or false)) [ ./ags ]
     ++ lib.optionals (vars.browser == "floorp") [ ./floorp ]
     ++ lib.optionals (vars.browser == "librewolf") [ ./librewolf ]
     ++ lib.optionals vars.programs.vscode [ ./vscode ]

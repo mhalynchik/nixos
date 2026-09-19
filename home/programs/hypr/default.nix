@@ -2,6 +2,7 @@
 
 let
   rgba = colors.toRgba;
+  eventHorizon = vars.programs.eventHorizon or false;
 
   # Wallpaper domain bridge only: curated Gallery wallpapers as a read-only
   # store dir. GTK/icon asset selection lives in the themes domain
@@ -33,6 +34,7 @@ let
       set -euo pipefail
       if systemctl --user is-active --quiet waybar.service; then
         systemctl --user kill -s SIGUSR1 waybar.service
+        ${lib.optionalString eventHorizon "event-horizon ipc call design toggleBar"}
       else
         systemctl --user reset-failed waybar.service 2>/dev/null || true
         systemctl --user start waybar.service
@@ -49,6 +51,7 @@ let
       set -euo pipefail
       systemctl --user reset-failed waybar.service 2>/dev/null || true
       systemctl --user restart waybar.service
+      ${lib.optionalString eventHorizon "systemctl --user restart event-horizon.service"}
     '';
   };
 
@@ -240,7 +243,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
         # Variables
         "$terminal" = vars.terminal;
         "$browser" = browser.bin;
-        "$menu" = "rofi -show drun -show-icons";
+        "$menu" = if eventHorizon then "event-horizon ipc call design open launcher" else "rofi -show drun -show-icons";
         "$fileManager" = "thunar";
         "$mainMod" = "SUPER";
 
@@ -269,9 +272,10 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
             "nm-applet"
             "udiskie"
             "blueman-applet"
-            "nwg-dock-hyprland -r -i 48 -mb 8"
-            "dock-watcher"
             "sleep 1 && wallpaper-startup"
+          ] ++ [
+            "nwg-dock-hyprland -r -i 48 -mb 8${lib.optionalString eventHorizon " -c 'event-horizon ipc call design open launcher'"}"
+            "dock-watcher"
           ];
 
         # Input configuration
@@ -288,9 +292,9 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
         # General settings - using dynamic theme colors
         general = {
           gaps_in = 4;
-          gaps_out = 12;
-          border_size = 2;
-          "col.active_border" = colors.hyprland.activeBorder;
+          gaps_out = if eventHorizon then 4 else 12;
+          border_size = if eventHorizon then 1 else 2;
+          "col.active_border" = if eventHorizon then "rgba(63d7addd)" else colors.hyprland.activeBorder;
           "col.inactive_border" = colors.hyprland.inactiveBorder;
           layout = "dwindle";
           allow_tearing = false;
@@ -665,7 +669,7 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
     '';
 
     # nwg-dock configuration - using dynamic theme colors
-    home.file.".config/nwg-dock-hyprland/style.css".text = ''
+    home.file.".config/nwg-dock-hyprland/style.css".text = if eventHorizon then builtins.readFile ../event-horizon/integration/dock.css else ''
       window {
         background: ${rgba colors.colors.base 0.75};
         border-radius: 14px;

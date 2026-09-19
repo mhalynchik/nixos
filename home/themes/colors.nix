@@ -13,6 +13,7 @@ let
   builtinPalettes = {
     catppuccin = import ./palettes/catppuccin.nix;
     crimson = import ./palettes/crimson.nix;
+    emerald = import ./palettes/emerald.nix;
   };
 
   # Builtin + curated Gallery adapters share one vars.theme selector namespace.
@@ -21,7 +22,8 @@ let
 
   # Select active palette based on vars.theme. No silent fallback: an unknown
   # theme aborts evaluation with the list of supported selectors.
-  activePalette = palettes.${vars.theme} or (builtins.throw ''
+  selectedTheme = if vars.programs.eventHorizon or false then "emerald" else vars.theme;
+  activePalette = palettes.${selectedTheme} or (builtins.throw ''
     Unknown vars.theme = "${vars.theme}".
     Supported themes: ${builtins.concatStringsSep ", " supportedThemes}
   '');
@@ -44,7 +46,7 @@ let
     in (hexCharToInt c1) * 16 + (hexCharToInt c2);
   # True when a curated Gallery theme is active (public flag for consumers that
   # must not import the Gallery domain, e.g. system modules).
-  galleryActive = galleryGtkThemeName != "";
+  galleryActive = !(vars.programs.eventHorizon or false) && galleryGtkThemeName != "";
 in
 {
   # Re-export the active palette
@@ -112,7 +114,7 @@ in
   # Font settings (shared)
   fonts = {
     monospace = "JetBrainsMono Nerd Font";
-    sans = "Inter";
+    sans = if vars.programs.eventHorizon or false then "Sansation" else "Inter";
     serif = "Noto Serif";
     size = {
       small = 10;

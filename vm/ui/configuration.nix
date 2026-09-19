@@ -35,7 +35,7 @@
   # ownership in an agent container, which logrotate rejects as non-root-owned.
   services.logrotate.enable = lib.mkForce false;
   services.greetd.settings.initial_session = {
-    command = "dbus-run-session Hyprland";
+    command = config.services.greetd.settings.default_session.command;
     user = vars.username;
   };
   users.users.${vars.username}.initialPassword = "ui";

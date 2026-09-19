@@ -7,7 +7,7 @@ let
   # Curated Gallery GTK/icon selection. For builtin themes galleryAssets is null
   # and the GTK block below is byte-for-byte identical to the previous config.
   gallery = import ./gallery { inherit lib inputs; };
-  galleryActive = gallery.isGallery vars.theme;
+  galleryActive = colors.galleryActive;
   galleryAssets =
     if galleryActive then gallery.assetsFor {
       inherit pkgs;

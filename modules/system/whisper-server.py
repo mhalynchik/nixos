@@ -1,11 +1,14 @@
 import os
 import tempfile
-import threading
+import asyncio
+import importlib.util
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
-from faster_whisper import WhisperModel
 
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
 WHISPER_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "ru")
@@ -19,52 +22,22 @@ WHISPER_PORT = int(os.environ.get("WHISPER_PORT", "8178"))
 WHISPER_DOWNLOAD_ROOT = os.environ.get("WHISPER_DOWNLOAD_ROOT", "/var/lib/whisper/models")
 
 
-def _whisper_model_from_env():
-    try:
-        return WhisperModel(
-            WHISPER_MODEL,
-            device=WHISPER_DEVICE,
-            compute_type=WHISPER_COMPUTE_TYPE,
-            download_root=WHISPER_DOWNLOAD_ROOT,
-        )
-    except Exception:
-        if WHISPER_DEVICE == "cpu":
-            raise
-        return WhisperModel(
-            WHISPER_MODEL,
-            device="cpu",
-            compute_type="int8",
-            download_root=WHISPER_DOWNLOAD_ROOT,
-        )
+worker_module = importlib.util.spec_from_file_location('whisper_idle', os.environ.get(
+    'WHISPER_IDLE_PATH', str(Path(__file__).with_name('whisper-idle.py'))))
+worker_module_object = importlib.util.module_from_spec(worker_module)
+worker_module.loader.exec_module(worker_module_object)
+worker = worker_module_object.IdleWorker(
+    [sys.executable, os.environ.get('WHISPER_WORKER_PATH', str(Path(__file__).with_name('whisper-worker.py')))],
+    idle_seconds=max(1, int(os.environ.get('WHISPER_IDLE_SECONDS', '300'))))
 
 
-def _text_from_audio_path(model, path, language):
-    segments, _info = model.transcribe(path, language=language or None)
-    return "".join(segment.text for segment in segments).strip()
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    await asyncio.to_thread(worker.close)
 
 
-whisper_model = None
-whisper_error = None
-whisper_ready = threading.Event()
-
-
-def _load_whisper_model():
-    global whisper_model, whisper_error
-    print(
-        f"loading whisper model {WHISPER_MODEL} device={WHISPER_DEVICE}",
-        flush=True,
-    )
-    try:
-        whisper_model = _whisper_model_from_env()
-        whisper_ready.set()
-        print("whisper model ready", flush=True)
-    except Exception as exc:
-        whisper_error = str(exc)
-        print(f"whisper model failed: {exc}", flush=True)
-        raise
-
-
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -75,17 +48,9 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    if whisper_ready.is_set():
-        return {"status": "ok", "model": WHISPER_MODEL, "device": WHISPER_DEVICE}
-    if whisper_error:
-        return JSONResponse(
-            {"status": "error", "error": whisper_error, "model": WHISPER_MODEL},
-            status_code=503,
-        )
-    return JSONResponse(
-        {"status": "loading", "model": WHISPER_MODEL, "device": WHISPER_DEVICE},
-        status_code=503,
-    )
+    process = worker.process
+    return {"status": "ok", "model": WHISPER_MODEL, "device": WHISPER_DEVICE,
+            "model_loaded": process is not None and process.poll() is None}
 
 
 @app.get("/v1/models")
@@ -101,11 +66,11 @@ def models():
 
 async def _text_from_upload(file, language):
     suffix = os.path.splitext(file.filename or "")[1] or ".audio"
-    data = await file.read()
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
-        tmp.write(data)
+        while chunk := await file.read(1024 * 1024):
+            tmp.write(chunk)
         tmp.flush()
-        return _text_from_audio_path(whisper_model, tmp.name, language)
+        return await asyncio.to_thread(worker.transcribe, tmp.name, language)
 
 
 def _transcription_response(text, response_format):
@@ -123,14 +88,14 @@ async def transcribe_audio(
     response_format: str = Form("json"),
 ):
     _ = model
-    if not whisper_ready.is_set():
-        raise HTTPException(status_code=503, detail=whisper_error or "model still loading")
-    text = await _text_from_upload(file, language or WHISPER_LANGUAGE)
+    try:
+        text = await _text_from_upload(file, language or WHISPER_LANGUAGE)
+    except (RuntimeError, OSError, ValueError, TimeoutError) as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     return _transcription_response(text, response_format)
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    threading.Thread(target=_load_whisper_model, daemon=True, name="whisper-load").start()
     uvicorn.run(app, host=WHISPER_HOST, port=WHISPER_PORT)
