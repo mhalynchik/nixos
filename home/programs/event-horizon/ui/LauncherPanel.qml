@@ -6,7 +6,8 @@ Item{
  function focusFirst(){search.forceActiveFocus();search.selectAll()}
  Component.onCompleted:api.command('search',{query:''})
  UiText{text:api.t('launcher');font.family:'ForestSmooth';font.pixelSize:35}
- UiButton{x:300;y:4;width:120;height:30;text:api.t('refresh');onClicked:api.command('refresh')}
+ UiButton{x:185;y:4;width:120;height:30;text:'Все приложения';onClicked:api.command('open_applications')}
+ UiButton{x:310;y:4;width:110;height:30;text:api.t('refresh');onClicked:api.command('refresh')}
  UiField{id:search;y:56;width:parent.width;placeholderText:api.t('search_hint');onTextEdited:debounce.restart();Keys.onDownPressed:{results.currentIndex=Math.min(results.count-1,results.currentIndex+1)}
  Keys.onUpPressed:{results.currentIndex=Math.max(0,results.currentIndex-1)}
  onAccepted:if(results.count>0)p.api.command('launch',{id:p.api.session.search[results.currentIndex].id})}

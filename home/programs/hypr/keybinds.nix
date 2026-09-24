@@ -2,6 +2,7 @@
 { lib, vars }:
 
 let
+  ehCommand = payload: "event-horizon ipc call design command '" + builtins.toJSON payload + "'";
   modifierRank = mod:
     if mod == "SUPER" then 0
     else if mod == "SHIFT" then 1
@@ -62,7 +63,7 @@ let
     { modifiers = [ "SUPER" ]; key = "R"; dispatcher = "exec"; argument = "$menu"; description = "App menu"; category = "Applications"; }
     { modifiers = [ "SUPER" ]; key = "W"; dispatcher = "exec"; argument = "$menu"; description = "App launcher"; category = "Applications"; }
     { modifiers = [ "SUPER" ]; key = "G"; dispatcher = "exec"; argument = "rofi -modi games -show games -show-icons -theme games"; description = "Games menu"; category = "Applications"; }
-    { modifiers = [ "SUPER" ]; key = "A"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "$menu" else "nwg-drawer"; description = "App drawer"; category = "Applications"; }
+    { modifiers = [ "SUPER" ]; key = "A"; dispatcher = "exec"; argument = "application-drawer"; description = "App drawer"; category = "Applications"; }
 
     { modifiers = [ "SUPER" ]; key = "Q"; dispatcher = "killactive"; description = "Close window"; category = "Windows"; }
     { modifiers = [ "SUPER" ]; key = "V"; dispatcher = "togglefloating"; description = "Toggle floating"; category = "Windows"; }
@@ -88,7 +89,7 @@ let
     { modifiers = [ "SUPER" "ALT" ]; key = "0"; dispatcher = "exec"; argument = "opacity-reset"; description = "Reset opacity"; category = "Windows"; }
 
     { modifiers = [ "SUPER" "SHIFT" ]; key = "L"; dispatcher = "exec"; argument = "hyprlock"; description = "Lock screen"; category = "System"; }
-    { modifiers = [ "SUPER" "SHIFT" ]; key = "V"; dispatcher = "exec"; argument = "clipboard-picker"; description = "Clipboard history"; category = "Tools"; }
+    { modifiers = [ "SUPER" "SHIFT" ]; key = "V"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "event-horizon ipc call design selectPage clipboard" else "clipboard-picker"; description = "Clipboard history"; category = "Tools"; }
     { modifiers = [ "SUPER" "SHIFT" ]; key = "K"; dispatcher = "exec"; argument = "cheatsheet"; description = "Keybind cheatsheet"; category = "System"; }
 
     { modifiers = [ "SUPER" ]; key = "period"; dispatcher = "exec"; argument = "emoji-picker"; description = "Emoji picker"; category = "Tools"; }
@@ -150,12 +151,12 @@ let
     { modifiers = [ "SUPER" "CTRL" "ALT" ]; key = "right"; dispatcher = "swapactiveworkspaces"; argument = "current +1"; description = "Swap workspace right"; category = "Monitors"; }
 
     # SwayOSD volume / brightness (repeatable)
-    { modifiers = [ ]; key = "XF86AudioRaiseVolume"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = "swayosd-client --output-volume raise"; description = "Volume up"; category = "Media"; }
-    { modifiers = [ ]; key = "XF86AudioLowerVolume"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = "swayosd-client --output-volume lower"; description = "Volume down"; category = "Media"; }
-    { modifiers = [ ]; key = "XF86AudioMute"; dispatcher = "exec"; argument = "swayosd-client --output-volume mute-toggle"; description = "Mute"; category = "Media"; }
-    { modifiers = [ ]; key = "XF86AudioMicMute"; dispatcher = "exec"; argument = "swayosd-client --input-volume mute-toggle"; description = "Mic mute"; category = "Media"; }
-    { modifiers = [ ]; key = "XF86MonBrightnessUp"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = "swayosd-client --brightness raise"; description = "Brightness up"; category = "Media"; }
-    { modifiers = [ ]; key = "XF86MonBrightnessDown"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = "swayosd-client --brightness lower"; description = "Brightness down"; category = "Media"; }
+    { modifiers = [ ]; key = "XF86AudioRaiseVolume"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then ehCommand { action = "quick_volume"; delta = 5; } else "swayosd-client --output-volume raise"; description = "Volume up"; category = "Media"; }
+    { modifiers = [ ]; key = "XF86AudioLowerVolume"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then ehCommand { action = "quick_volume"; delta = -5; } else "swayosd-client --output-volume lower"; description = "Volume down"; category = "Media"; }
+    { modifiers = [ ]; key = "XF86AudioMute"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then ehCommand { action = "output_mute"; } else "swayosd-client --output-volume mute-toggle"; description = "Mute"; category = "Media"; }
+    { modifiers = [ ]; key = "XF86AudioMicMute"; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then "event-horizon ipc call design command '{\"action\":\"mic_mute\"}'" else "swayosd-client --input-volume mute-toggle"; description = "Mic mute"; category = "Media"; }
+    { modifiers = [ ]; key = "XF86MonBrightnessUp"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then ehCommand { action = "brightness"; delta = 5; } else "swayosd-client --brightness raise"; description = "Brightness up"; category = "Media"; }
+    { modifiers = [ ]; key = "XF86MonBrightnessDown"; phase = "repeat"; repeat = true; dispatcher = "exec"; argument = if vars.programs.eventHorizon or false then ehCommand { action = "brightness"; delta = -5; } else "swayosd-client --brightness lower"; description = "Brightness down"; category = "Media"; }
 
     { modifiers = [ ]; key = "XF86AudioPlay"; dispatcher = "exec"; argument = "playerctl play-pause"; description = "Play/Pause"; category = "Media"; }
     { modifiers = [ ]; key = "XF86AudioPause"; dispatcher = "exec"; argument = "playerctl play-pause"; description = "Pause"; category = "Media"; }

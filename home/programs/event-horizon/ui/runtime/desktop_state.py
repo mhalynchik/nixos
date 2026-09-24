@@ -1,11 +1,13 @@
 """Persistent local agenda, notification history, preferences and timer state."""
 import datetime,json,math,os,time,uuid
 from pathlib import Path
+from timer_sound import SOUND_DEFAULTS,sound_settings,valid_sound_setting
+import notification_history
 
 class DesktopState:
  def __init__(self,path,clock=time.time):
   self.path=Path(path);self.clock=clock;self.error=''
-  self.data={'version':1,'agenda':[],'notifications':[],'recent':[],'settings':{'dnd':False,'reducedMotion':False},'timer':{'status':'idle','duration':1500,'remaining':1500,'deadline':0,'generation':0}}
+  self.data={'version':1,'agenda':[],'notifications':[],'recent':[],'notificationPolicies':{},'settings':{'dnd':False,'reducedMotion':False,**SOUND_DEFAULTS},'timer':{'status':'idle','duration':1500,'remaining':1500,'deadline':0,'generation':0}}
   if self.path.exists():
    try:
     loaded=json.loads(self.path.read_text());assert loaded.get('version')==1
@@ -20,6 +22,8 @@ class DesktopState:
      assert all(isinstance(item[k],str) for k in ['id','date','title','time','kind']);datetime.date.fromisoformat(item['date']);assert isinstance(item['done'],bool)
     for item in loaded['notifications']:
      assert all(isinstance(item[k],str) for k in ['id','session','app','summary','body']);assert isinstance(item['sourceId'],int) and isinstance(item['read'],bool) and isinstance(item['time'],(float,int))
+    loaded['settings'].update(sound_settings(loaded['settings']))
+    loaded['notificationPolicies']=notification_history.normalize_policies(loaded.get('notificationPolicies'))
     self.data.update(loaded)
    except (ValueError,AssertionError,KeyError,TypeError,AttributeError):
     target=self.path.with_name(self.path.name+'.corrupt-'+uuid.uuid4().hex[:8]);self.path.rename(target);self.error='state_recovered'
@@ -30,16 +34,31 @@ class DesktopState:
   with os.fdopen(fd,'w') as f:json.dump(self.data,f,ensure_ascii=False);f.flush();os.fsync(f.fileno())
   os.replace(temp,self.path)
  def setting(self,key,value):
-  if key not in ['dnd','reducedMotion'] or not isinstance(value,bool):raise ValueError('invalid_setting')
+  if key in SOUND_DEFAULTS:
+   if not valid_sound_setting(key,value):raise ValueError('invalid_setting')
+  elif key not in ['dnd','reducedMotion'] or not isinstance(value,bool):raise ValueError('invalid_setting')
   self.data['settings'][key]=value;self.save()
  def notify(self,value):
-  item={'id':uuid.uuid4().hex,'sourceId':int(value.get('sourceId',value.get('id',0))),'session':str(value.get('session','')),'app':str(value.get('app') or 'Application')[:160],'summary':str(value.get('summary',''))[:512],'body':str(value.get('body',''))[:4096],'time':self.clock(),'read':False}
-  self.data['notifications']=[n for n in self.data['notifications'] if (n['session'],n['sourceId'])!=(item['session'],item['sourceId'])]
-  self.data['notifications']=(self.data['notifications']+[item])[-200:];self.save();return item
- def read_group(self,app):
+  self.data['notifications'],item=notification_history.append(self.data['notifications'],value,self.data['notificationPolicies'],self.clock());self.save();return item
+ def prune_notifications(self):
+  items=notification_history.prune(self.data['notifications'],self.data['notificationPolicies'],self.clock())
+  if items!=self.data['notifications']:self.data['notifications']=items;self.save()
+ def notification_policy(self,app,days,limit):
+  if not isinstance(app,str) or not app or len(app)>160:raise ValueError('invalid_notification_policy')
+  settings=notification_history.policy({'days':days,'limit':limit})
+  policies=self.data['notificationPolicies'];policies.pop(app,None);policies[app]=settings
+  self.data['notificationPolicies']=notification_history.normalize_policies(policies)
+  self.prune_notifications();self.save()
+ def read_group(self,app,conversation=None):
   for n in self.data['notifications']:
-   if n['app']==app:n['read']=True
+   if n['app']==app and (conversation is None or n.get('conversationId','')==conversation):n['read']=True
   self.save()
+ def read_notification(self,ident):
+  for n in self.data['notifications']:
+   if n['id']==ident:n['read']=True
+  self.save()
+ def remove_notification_group(self,app,conversation=None):
+  self.data['notifications']=[n for n in self.data['notifications'] if not (n['app']==app and (conversation is None or n.get('conversationId','')==conversation))];self.save()
  def clear_read(self):self.data['notifications']=[n for n in self.data['notifications'] if not n['read']];self.save()
  def remove_notification(self,ident):self.data['notifications']=[n for n in self.data['notifications'] if n['id']!=ident];self.save()
  def add_task(self,date,title,at='',kind='task'):

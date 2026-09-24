@@ -15,6 +15,19 @@ let
   gaming = import ./gaming-mode.nix { inherit pkgs vars lib; };
   screenshot = import ./screenshot.nix { inherit pkgs; };
 
+  applicationDrawer = pkgs.writeShellScriptBin "application-drawer" ''
+    ${lib.optionalString eventHorizon "event-horizon ipc call design close || true"}
+    exec ${pkgs.nwg-drawer}/bin/nwg-drawer "$@"
+  '';
+
+  eventHorizonIdle = pkgs.writeShellApplication {
+    name = "event-horizon-idle";
+    runtimeInputs = with pkgs; [ hyprland brightnessctl procps systemd ];
+    text = ''
+      exec ${pkgs.python3}/bin/python3 ${../event-horizon/ui/runtime/idle_settings.py} --hypridle ${pkgs.hypridle}/bin/hypridle "$@"
+    '';
+  };
+
   cheatsheetFile = pkgs.writeText "hypr-cheatsheet.txt" keybinds.cheatsheetText;
   cheatsheet = pkgs.writeShellApplication {
     name = "cheatsheet";
@@ -195,7 +208,13 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
     # sd-switch restarts user units when X-Restart-Triggers change (waybar, swaync, ags).
     systemd.user.startServices = true;
 
+    # Home Manager's Hyprland module selects the user profile for portal
+    # discovery, hiding the system's GTK backend unless it is also installed
+    # here. AppChooser is required for OpenURI (browser sign-in links).
+    xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+
     home.packages = with pkgs; [
+      applicationDrawer
       swww
       mpvpaper        # Video wallpapers
       hyprpaper
@@ -263,6 +282,8 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
         ];
 
         # Autostart applications (waybar, swaync, ags are systemd user services).
+        # Event Horizon handles explicit pairing; a second BlueZ agent would
+        # surface unsolicited service-authorization notifications from Blueman.
         exec-once =
           [
             "hyprctl setcursor Bibata-Modern-Classic 24"
@@ -271,10 +292,9 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
             browser.bin
             "nm-applet"
             "udiskie"
-            "blueman-applet"
             "sleep 1 && wallpaper-startup"
-          ] ++ [
-            "nwg-dock-hyprland -r -i 48 -mb 8${lib.optionalString eventHorizon " -c 'event-horizon ipc call design open launcher'"}"
+          ] ++ lib.optional (!eventHorizon) "blueman-applet" ++ [
+            "nwg-dock-hyprland -r -i 48 -mb 8 -c application-drawer"
             "dock-watcher"
           ];
 
@@ -581,17 +601,19 @@ if keybinds.collisionError != null then throw keybinds.collisionError else {
 
     services.hypridle = {
       enable = true;
+      package = lib.mkIf eventHorizon eventHorizonIdle;
       settings = {
         general = {
           # Let the compositor own the locker so restarting hypridle (for
           # example during a rebuild) cannot kill an active lock screen.
           lock_cmd = "pidof hyprlock || hyprctl dispatch exec hyprlock";
-          before_sleep_cmd = "loginctl lock-session";
+          before_sleep_cmd = "pidof hyprlock || hyprctl dispatch exec hyprlock";
           after_sleep_cmd = "hyprctl dispatch dpms on";
         };
         listener = [
           { timeout = 300; on-timeout = "brightnessctl -s set 30"; on-resume = "brightnessctl -r"; }
-          { timeout = 600; on-timeout = "loginctl lock-session"; }
+        ] ++ lib.optionals (!eventHorizon) [
+          { timeout = 600; on-timeout = "pidof hyprlock || hyprctl dispatch exec hyprlock"; }
           { timeout = 900; on-timeout = "hyprctl dispatch dpms off"; on-resume = "hyprctl dispatch dpms on"; }
           { timeout = 1800; on-timeout = "systemctl suspend"; }
         ];

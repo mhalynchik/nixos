@@ -321,7 +321,9 @@ class Bluetooth:
             return
         self.snapshot()
         if action == 'bt_power':
-            if not message['enabled']:self.stop_scan()
+            if not message['enabled']:
+                self.cancel_pairing()
+                self.stop_scan()
             for path in self.adapters:
                 self.bus.set(BLUEZ, path, BLUEZ+'.Adapter1', 'Powered', 'b', bool(message['enabled']))
             return

@@ -34,10 +34,8 @@
   # Disposable UI sessions do not rotate logs. A shared store can have mapped
   # ownership in an agent container, which logrotate rejects as non-root-owned.
   services.logrotate.enable = lib.mkForce false;
-  services.greetd.settings.initial_session = {
-    command = config.services.greetd.settings.default_session.command;
-    user = vars.username;
-  };
+  # Exercise the production greetd session model; a VM-only initial_session
+  # previously hid the host's incorrect greeter-class desktop from lock tests.
   users.users.${vars.username}.initialPassword = "ui";
   security.sudo.wheelNeedsPassword = false;
 

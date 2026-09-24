@@ -1,5 +1,5 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, python3, mpv, cava,
-  pulseaudio, hyprland, glib, xdg-utils, systemd, blueman, pavucontrol, networkmanagerapplet, swww, mpvpaper, ffmpeg }:
+  pulseaudio, pciutils, brightnessctl, wl-clipboard, grim, slurp, wf-recorder, xdg-user-dirs, hyprland, glib, xdg-utils, systemd, nwg-drawer, blueman, pavucontrol, networkmanagerapplet, swww, mpvpaper, ffmpeg }:
 let python = python3.withPackages (ps: [ ps.pygobject3 ]); in
 stdenvNoCC.mkDerivation {
   pname = "event-horizon";
@@ -16,9 +16,9 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     mkdir -p "$out/share/event-horizon" "$out/bin"
     cp -r . "$out/share/event-horizon/"
-    ${python3}/bin/python3 runtime/timer_sound.py "$out/share/event-horizon/sounds/timer.wav"
+    ${python3}/bin/python3 runtime/timer_sound.py "$out/share/event-horizon/sounds"
     makeWrapper ${quickshell}/bin/qs "$out/bin/event-horizon" \
-      --prefix PATH : ${lib.makeBinPath [ python mpv cava pulseaudio hyprland glib xdg-utils systemd blueman pavucontrol networkmanagerapplet swww mpvpaper ffmpeg ]} \
+      --prefix PATH : ${lib.makeBinPath [ python mpv cava pulseaudio pciutils brightnessctl wl-clipboard grim slurp wf-recorder xdg-user-dirs hyprland glib xdg-utils systemd nwg-drawer blueman pavucontrol networkmanagerapplet swww mpvpaper ffmpeg ]} \
       --prefix GI_TYPELIB_PATH : "${glib.out}/lib/girepository-1.0" \
       --add-flags "-p $out/share/event-horizon"
     makeWrapper "$out/bin/event-horizon" "$out/bin/event-horizon-preview" \

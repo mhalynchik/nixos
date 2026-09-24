@@ -4,6 +4,13 @@ let
   package = pkgs.callPackage ./package.nix {
     quickshell = pkgs-unstable.quickshell;
   };
+  bluetoothAuthorization = pkgs.writeShellApplication {
+    name = "event-horizon-bluetooth-authorization";
+    runtimeInputs = [ pkgs.python3 pkgs.dconf ];
+    text = ''
+      exec python3 ${package}/share/event-horizon/runtime/blueman_agent.py "$@"
+    '';
+  };
   gallery = import ../../themes/gallery { inherit lib inputs; };
   wallpaperConfig = pkgs.writeText "event-horizon-wallpapers.json" (builtins.toJSON {
     static = [ "${vars.homeDirectory}/${vars.staticWallpapersDir}" ]
@@ -15,6 +22,8 @@ in
 {
   home-manager.users.${vars.username} = { lib, ... }: {
     home.packages = [ package ];
+    imports = [ (import ./tools.nix { inherit pkgs lib package; }) ];
+    home.file.".config/hypr/hyprlock.conf".text = lib.mkForce (import ./lock.nix { inherit vars; });
     home.file.".local/share/fonts/event-horizon".source = ./ui/fonts;
 
     systemd.user.services.event-horizon = {
@@ -25,8 +34,12 @@ in
         Conflicts = [ "ags.service" "swaync.service" ];
       };
       Service = {
+        ExecStartPre = "${bluetoothAuthorization}/bin/event-horizon-bluetooth-authorization reserve";
         ExecStart = "${package}/bin/event-horizon";
-        ExecStopPost = "${package}/bin/event-horizon-wallpaper-restore";
+        ExecStopPost = [
+          "-${bluetoothAuthorization}/bin/event-horizon-bluetooth-authorization restore"
+          "${package}/bin/event-horizon-wallpaper-restore"
+        ];
         Environment = [ "EVENT_HORIZON_WALLPAPER_CONFIG=${wallpaperConfig}" ];
         Restart = "on-failure";
         RestartSec = 3;
@@ -58,9 +71,9 @@ in
         };
         "custom/launcher" = {
           format = "";
-          on-click = "${package}/bin/event-horizon ipc call design open launcher";
-          on-click-right = "rofi -show run";
-          tooltip-format = "Приложения";
+          on-click = "${package}/bin/event-horizon ipc call design selectPage launcher";
+          on-click-right = "application-drawer";
+          tooltip-format = "Поиск · ПКМ: все приложения";
         };
         "hyprland/workspaces" = {
           all-outputs = false;

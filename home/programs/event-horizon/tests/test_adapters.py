@@ -13,15 +13,17 @@ class AdapterContractTests(unittest.TestCase):
    self.assertEqual([n['summary'] for n in state.data['notifications']],['two','replacement'])
  def test_pactl_channel_volume_contract(self):
   self.assertEqual(volume({'volume':{'front-left':{'value':32768},'front-right':{'value':65536}}}),75)
+ def test_volume_above_nominal_is_not_clamped_in_display(self):
+  self.assertEqual(volume({'volume':{'front-left':{'value':78643},'front-right':{'value':78643}}}),120)
  def test_invalid_persisted_timer_recovers_without_data_loss(self):
   with tempfile.TemporaryDirectory() as d:
    path=Path(d)/'state.json';state=DesktopState(path);state.save();value=json.loads(path.read_text());value['timer']={'status':'running'};path.write_text(json.dumps(value))
    state=DesktopState(path);self.assertEqual(state.error,'state_recovered');self.assertEqual(state.timer_snapshot()['status'],'idle');self.assertEqual(len(list(Path(d).glob('*.corrupt-*'))),1)
  def test_async_launcher_reports_exit_failure(self):
   import time,types
-  from unittest.mock import patch
+  from unittest.mock import patch,Mock
   from desktop_backend import Session
-  session=Session.__new__(Session);session.pending=[];session.serial=0;session.error='';session.store=types.SimpleNamespace(timer_tick=lambda:False)
+  session=Session.__new__(Session);session.timer_sound=Mock();session.pending=[];session.serial=0;session.error='';session.store=types.SimpleNamespace(timer_tick=lambda:False,prune_notifications=lambda:None)
   session.launch([sys.executable,'-c','import sys;sys.stderr.write("launch failure");sys.exit(23)'])
   with patch('desktop_backend.audio_snapshot',return_value={}),patch('desktop_backend.desktop_snapshot',return_value={}):
    for _ in range(50):
@@ -47,7 +49,7 @@ class AdapterContractTests(unittest.TestCase):
   runtime=str(Path(__file__).resolve().parents[1]/'ui/runtime')
   script='import desktop_backend as b; b.audio_snapshot=lambda:{}; b.desktop_snapshot=lambda:{}; b.index_apps=lambda:[]; b.index_files=lambda:[]; b.main()'
   with tempfile.TemporaryDirectory() as d:
-   env=dict(os.environ,PYTHONPATH=runtime,EVENT_HORIZON_STATE_DIR=d)
+   env=dict(os.environ,PYTHONPATH=runtime,EVENT_HORIZON_STATE_DIR=d,XDG_RUNTIME_DIR=d)
    process=subprocess.Popen([sys.executable,'-u','-c',script],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)
    try:
     messages=[{'action':'search','query':'first'},{'action':'search','query':'second'}]

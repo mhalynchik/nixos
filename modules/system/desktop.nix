@@ -1,13 +1,23 @@
 { config, lib, pkgs, vars, colors, ... }:
-
+let
+  desktopSession = pkgs.writeShellScript "start-hyprland" ''
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(${pkgs.coreutils}/bin/id -u)/bus"
+    # Do not leave idle daemons attached to the previous compositor/session.
+    trap '${pkgs.systemd}/bin/systemctl --user stop hyprland-session.target graphical-session.target' EXIT
+    /run/current-system/sw/bin/Hyprland
+    exit $?
+  '';
+in
 {
   services.greetd.enable = true;
-  services.greetd.settings.default_session.command = "${pkgs.writeShellScript "start-hyprland" ''
-    # Desktop applications and systemd user services must share one session bus.
-    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(${pkgs.coreutils}/bin/id -u)/bus"
-    exec /run/current-system/sw/bin/Hyprland
-  ''}";
-  services.greetd.settings.default_session.user = vars.username;
+  services.greetd.settings = {
+    # Autologin is a real user session, never the greeter's desktop.
+    initial_session = { command = "${desktopSession}"; user = vars.username; };
+    default_session = {
+      command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --greeting 'Event Horizon' --theme 'border=green;text=white;prompt=green;action=cyan;button=green' --cmd ${desktopSession}";
+      user = "greeter";
+    };
+  };
 
   programs.hyprland.enable = true;
   programs.hyprland.xwayland.enable = true;

@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'ui/runtime'))
-from connections import NM,NM_PATH,Wifi,Bluetooth,security_name
+from connections import NM,NM_PATH,BLUEZ,Wifi,Bluetooth,security_name
 
 
 class Bus:
@@ -65,6 +65,36 @@ class RadioTests(unittest.TestCase):
         bt.respond({'accept':False})
         self.assertIsNone(bt.request)
         self.assertEqual(bt.bus.calls[-1][0][3],'CancelPairing')
+
+    def test_agent_rejects_unsolicited_authorization_without_a_dialog(self):
+        for method,args in [('RequestAuthorization',('/device',)),('AuthorizeService',('/device','audio-service'))]:
+            with self.subTest(method=method):
+                bt=Bluetooth.__new__(Bluetooth);bt.lock=threading.Lock();bt.pairing=set();bt.request=None;bt.invocation=None
+                invocation=Mock();parameters=Mock();parameters.unpack.return_value=args
+                bt.agent_call(None,None,None,None,method,parameters,invocation)
+                invocation.return_dbus_error.assert_called_once_with('org.bluez.Error.Rejected','Pairing was not requested')
+                invocation.return_value.assert_not_called()
+                self.assertIsNone(bt.request)
+
+    def test_user_requested_pairing_still_requires_confirmation(self):
+        bt=Bluetooth.__new__(Bluetooth);bt.lock=threading.Lock();bt.bus=Bus();bt.pairing={'/device'};bt.devices={'/device':{'name':'Headphones'}};bt.request=None;bt.invocation=None
+        invocation=Mock();parameters=Mock();parameters.unpack.return_value=('/device',123456)
+        bt.agent_call(None,None,None,None,'RequestConfirmation',parameters,invocation)
+        self.assertEqual(bt.request['name'],'Headphones');self.assertEqual(bt.request['code'],'123456')
+        invocation.return_value.assert_not_called();invocation.return_dbus_error.assert_not_called()
+        bt.respond({'accept':True})
+        invocation.return_value.assert_called_once_with(None)
+
+    def test_power_off_cancels_pairing_before_disabling_every_adapter(self):
+        bt=Bluetooth.__new__(Bluetooth);bt.lock=threading.Lock();bt.bus=Bus();bt.pairing={'/device'};bt.scanning={'/adapter1'}
+        bt.adapters={'/adapter1':{},'/adapter2':{}};bt.snapshot=Mock();bt.request={'kind':'RequestConfirmation'};bt.invocation=Mock()
+        invocation=bt.invocation
+        bt.execute({'action':'bt_power','enabled':False})
+        invocation.return_dbus_error.assert_called_once_with('org.bluez.Error.Canceled','Canceled by user')
+        self.assertIsNone(bt.request)
+        self.assertEqual([x[0][3] for x in bt.bus.calls],['CancelPairing','StopDiscovery','Powered','Powered'])
+        self.assertEqual(bt.bus.calls[-2][0],(BLUEZ,'/adapter1',BLUEZ+'.Adapter1','Powered','b',False))
+        self.assertEqual(bt.bus.calls[-1][0],(BLUEZ,'/adapter2',BLUEZ+'.Adapter1','Powered','b',False))
 
     def test_disabled_or_unavailable_wifi_never_requests_scan(self):
         for override in [{'WirelessEnabled':False},{'WirelessHardwareEnabled':False},{'NetworkingEnabled':False}]:

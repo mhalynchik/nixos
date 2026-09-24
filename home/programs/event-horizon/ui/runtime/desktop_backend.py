@@ -2,6 +2,11 @@
 import configparser,datetime,json,math,os,re,select,shutil,signal,subprocess,sys,time,tempfile
 from pathlib import Path
 from desktop_state import DesktopState,SearchIndex
+from idle_settings import IdleSettings
+from timer_sound import TimerSoundPlayer
+from desktop_profiles import DesktopProfiles
+from desktop_tools import DesktopTools
+from widget_layout import WidgetLayouts
 BASE=Path(__file__).resolve().parent.parent
 LABELS=json.loads((BASE/'i18n/ru.json').read_text())
 
@@ -24,6 +29,11 @@ def audio_rows(rows, group):
   props=x.get('properties',{})
   if group=='sources' and (x.get('monitor_of_sink') not in [None,4294967295,'4294967295'] or x.get('name','').endswith('.monitor')):continue
   row={'id':x['index'],'name':x.get('name',''),'volume':volume(x),'mute':bool(x.get('mute'))}
+  if group=='sources':
+   # A disconnected analogue jack still exists as a source and may ignore mute.
+   # Unknown availability (common on USB/virtual inputs) is not disconnection.
+   port=next((p for p in x.get('ports',[]) if p.get('name')==x.get('active_port')),None)
+   row['available']=not port or port.get('availability') not in ['not available','no']
   if group=='sink-inputs':
    binary=Path(props.get('application.process.binary','')).name.removeprefix('.').removesuffix('-wrapped')
    label={'floorp':'Floorp','librewolf':'LibreWolf','spotify':'Spotify'}.get(binary) or audio_label(props.get('application.name'),binary,props.get('media.name'),'Audio')
@@ -44,6 +54,9 @@ def audio_snapshot():
   result['defaultSink']=run(['pactl','get-default-sink']);result['defaultSource']=run(['pactl','get-default-source'])
   for group,key in [('sinks','sinks'),('sources','sources'),('sink-inputs','streams')]:
    result[key]=audio_rows(json.loads(run(['pactl','-f','json','list',group])),group)
+  microphones=[x for x in result['sources'] if x['available']]
+  if not any(x['name']==result['defaultSource'] for x in microphones):
+   result['defaultSource']=microphones[0]['name'] if microphones else ''
   result['available']=True
  except (ValueError,OSError,RuntimeError,subprocess.TimeoutExpired):pass
  return result
@@ -51,6 +64,19 @@ def audio_snapshot():
 def desktop_snapshot():
  monitors=data(['hyprctl','monitors','-j'],[]);windows=data(['hyprctl','clients','-j'],[]);workspaces=data(['hyprctl','workspaces','-j'],[])
  return {'monitors':monitors,'windows':[{'address':x['address'],'title':x.get('title',''),'app':x.get('class',''),'workspace':x['workspace']['id'],'monitor':x.get('monitor',0),'fullscreen':x.get('fullscreen',0),'size':x.get('size',[0,0]),'at':x.get('at',[0,0])} for x in windows if x.get('mapped',True)],'workspaces':workspaces}
+
+def brightness_snapshot():
+ try:
+  fields=run(['brightnessctl','-c','backlight','-m']).splitlines()[0].split(',')
+  value=int(fields[3].rstrip('%'))
+  return {'available':True,'value':max(0,min(100,value)),'device':fields[0]}
+ except (ValueError,IndexError,OSError,RuntimeError,subprocess.TimeoutExpired):
+  return {'available':False,'value':0,'device':''}
+
+def committed_wallpaper(lock=False):
+ path=Path(os.environ.get('XDG_STATE_HOME',str(Path.home()/'.local/state')))/('current-lock-wallpaper' if lock else 'current-wallpaper')
+ try:return str(path.resolve(strict=True))
+ except (OSError,RuntimeError):return ''
 
 def index_apps():
  roots=[Path(os.environ.get('XDG_DATA_HOME',str(Path.home()/'.local/share')))]+[Path(x) for x in os.environ.get('XDG_DATA_DIRS','/usr/local/share:/usr/share').split(':')]
@@ -80,12 +106,15 @@ def index_files():
     if len(items)>=10000:return items
  return items
 
-def commands():return [{'id':'command:'+x,'name':LABELS[x],'kind':'command','command':x} for x in ['sound','notifications','overview','agenda','timer','change_wallpaper','animated_wallpaper','power','lock','bluetooth','wifi','connect_headphones']]
+def commands():return [{'id':'command:'+x,'name':LABELS[x],'kind':'command','command':x} for x in ['sound','notifications','overview','agenda','timer','change_wallpaper','animated_wallpaper','power','lock','bluetooth','wifi','connect_headphones','tools','clipboard','capture','layout','profiles','settings']]
 
 class Session:
  def __init__(self):
   root=Path(os.environ.get('EVENT_HORIZON_STATE_DIR',str(Path(os.environ.get('XDG_STATE_HOME',str(Path.home()/'.local/state')))/'event-horizon')))
-  self.store=DesktopState(root/'desktop.json');self.index=SearchIndex(index_apps(),index_files(),commands());self.query='';self.audio={};self.desktop={};self.error=self.store.error;self.event=None;self.serial=0;self.pending=[]
+  self.idle=IdleSettings(root/'idle.json')
+  self.timer_sound=TimerSoundPlayer(BASE/'sounds')
+  self.profiles=DesktopProfiles(root/'profiles.json');self.tools=DesktopTools(root);self.layouts=WidgetLayouts(root/'layouts.json');self.brightness=brightness_snapshot();self.prune_at=0
+  self.store=DesktopState(root/'desktop.json');self.index=SearchIndex(index_apps(),index_files(),commands());self.query='';self.audio={};self.desktop={};self.error=self.store.error or self.idle.error;self.event=None;self.serial=0;self.pending=[]
  def launch(self,args):
   log=tempfile.TemporaryFile(mode='w+t')
   try:process=subprocess.Popen(args,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=log)
@@ -94,8 +123,24 @@ class Session:
  def launch_external(self,args):
   # Applications get their own scope and survive a shell service restart.
   self.launch(['systemd-run','--user','--scope','--quiet','--']+args)
+ def lock_screen(self):
+  # User services have no caller login session. Resolve our graphical session
+  # explicitly instead of asking logind to lock the service's nonexistent one.
+  ident=run(['loginctl','show-user',str(os.getuid()),'--property=Display','--value'])
+  if not re.fullmatch(r'[A-Za-z0-9_-]+',ident):raise RuntimeError('Активный графический сеанс не найден')
+  properties=run(['loginctl','show-session',ident,'--property=User','--property=Active','--property=Remote','--property=Type','--property=Class'])
+  session=dict(line.split('=',1) for line in properties.splitlines() if '=' in line)
+  if session.get('User')!=str(os.getuid()) or session.get('Active')!='yes' or session.get('Remote')!='no' or session.get('Type')!='wayland':
+   raise RuntimeError('Активный локальный сеанс Wayland не найден')
+  if session.get('Class')=='greeter':raise RuntimeError('После обновления перезагрузите компьютер: текущий рабочий стол ещё запущен как greeter.')
+  run(['systemctl','--user','is-active','hypridle.service'])
+  run(['loginctl','lock-session',ident])
+  self.event={'kind':'close'}
  def emit(self):
-  value={'labels':LABELS,'notifications':self.store.data['notifications'][-200:],'agenda':self.store.data['agenda'],'preferences':self.store.data['settings'],'timer':self.store.timer_snapshot(),'audio':self.audio,'desktop':self.desktop,'search':self.index.search(self.query,self.store.data['recent']),'query':self.query,'error':self.error,'event':self.event,'serial':self.serial}
+  value={'idle':dict(self.idle.values),'labels':LABELS,'notifications':self.store.data['notifications'],'notificationPolicies':self.store.data['notificationPolicies'],'agenda':self.store.data['agenda'],'preferences':self.store.data['settings'],'timer':self.store.timer_snapshot(),'timerSoundPlaying':self.timer_sound.active,'audio':self.audio,'desktop':self.desktop,'search':self.index.search(self.query,self.store.data['recent']),'query':self.query,'error':self.error,'event':self.event,'serial':self.serial}
+  value.update(profiles=self.profiles.snapshot(),brightness=self.brightness,layout=self.layouts.snapshot(committed_wallpaper()),**self.tools.snapshot())
+  background=committed_wallpaper(True)
+  value['layout']['background']=Path(background).as_uri() if background else ''
   print(json.dumps(value,ensure_ascii=False),flush=True)
  def execute(self,m):
   action=m.get('action','');self.error='';self.event=None
@@ -105,31 +150,40 @@ class Session:
    item=self.index.resolve(m['id']);self.store.remember(item['id'])
    if item['kind']=='app':self.launch_external(['gio','launch',item['path']]);self.event={'kind':'close'}
    elif item['kind']=='file':self.launch_external(['gio','open',item['path']]);self.event={'kind':'close'}
-   elif item['command'] in ['sound','notifications','overview','agenda','timer','bluetooth','wifi']:self.event={'kind':'page','page':'media' if item['command']=='sound' else item['command']}
+   elif item['command'] in ['sound','notifications','overview','agenda','timer','bluetooth','wifi','tools','clipboard','capture','layout','profiles','settings']:self.event={'kind':'page','page':'media' if item['command']=='sound' else item['command']}
    elif item['command'] in ['change_wallpaper','animated_wallpaper','power']:self.event={'kind':'page','page':{'change_wallpaper':'wallpapers','animated_wallpaper':'animated','power':'power'}[item['command']]}
-   elif item['command']=='lock':subprocess.Popen(['loginctl','lock-session'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);self.event={'kind':'close'}
+   elif item['command']=='lock':self.lock_screen()
    elif item['command']=='connect_headphones':self.event={'kind':'page','page':'bluetooth'}
+  elif action=='open_applications':self.launch_external(['nwg-drawer']);self.event={'kind':'close'}
   elif action=='open_audio_settings':self.launch_external(['pavucontrol']);self.event={'kind':'close'}
   elif action=='open_connection_settings':
    commands={'wifi':'nm-connection-editor','bluetooth':'blueman-manager'}
    if m.get('kind') not in commands:raise ValueError('unknown_action')
    self.launch_external([commands[m['kind']]]);self.event={'kind':'close'}
   elif action=='power':
-   operations={'lock':['loginctl','lock-session'],'suspend':['systemctl','suspend'],'logout':['hyprctl','dispatch','exit'],'reboot':['systemctl','reboot'],'poweroff':['systemctl','poweroff']}
-   if m.get('operation') not in operations:raise ValueError('unknown_action')
-   self.launch_external(operations[m['operation']]);self.event={'kind':'close'}
+   if m.get('operation')=='lock':self.lock_screen()
+   else:
+    operations={'suspend':['systemctl','suspend'],'logout':['hyprctl','dispatch','exit'],'reboot':['systemctl','reboot'],'poweroff':['systemctl','poweroff']}
+    if m.get('operation') not in operations:raise ValueError('unknown_action')
+    self.launch_external(operations[m['operation']]);self.event={'kind':'close'}
+  elif action=='idle_settings':self.idle.apply({key:m.get(key) for key in ['lockMinutes','screenMinutes','suspendMinutes']})
   elif action=='setting':self.store.setting(m['key'],m['value'])
   elif action=='notify':self.store.notify(m)
-  elif action=='read_group':self.store.read_group(m['app'])
+  elif action=='read_group':self.store.read_group(m['app'],m.get('conversation'))
+  elif action=='read_notification':self.store.read_notification(m['id'])
+  elif action=='notification_policy':self.store.notification_policy(m['app'],m['days'],m['limit'])
+  elif action=='remove_notification_group':self.store.remove_notification_group(m['app'],m.get('conversation'))
   elif action=='clear_read':self.store.clear_read()
   elif action=='remove_notification':self.store.remove_notification(m['id'])
   elif action=='add_task':self.store.add_task(m['date'],m['title'],m.get('time',''),m.get('kind','task'));self.event={'kind':'task_added'}
   elif action=='toggle_task':self.store.toggle_task(m['id'])
   elif action=='delete_task':self.store.delete_task(m['id'])
-  elif action=='timer_start':self.store.timer_start(m['seconds'])
+  elif action=='timer_start':self.store.timer_start(m['seconds']);self.timer_sound.stop()
   elif action=='timer_pause':self.store.timer_pause()
   elif action=='timer_resume':self.store.timer_resume()
-  elif action=='timer_reset':self.store.timer_reset()
+  elif action=='timer_reset':self.store.timer_reset();self.timer_sound.stop()
+  elif action=='timer_sound_preview':self.timer_sound.start(self.store.data['settings'],preview=True)
+  elif action=='timer_sound_stop':self.timer_sound.stop()
   elif action in ['volume','mute','default_device']:
    self.audio=audio_snapshot();group=m.get('group','sinks');allowed={'sinks':'sink','sources':'source','streams':'sink-input'}
    if group not in allowed:raise ValueError('invalid_audio_group')
@@ -151,11 +205,26 @@ class Session:
      if group=='sources' and (old_source is None or stream.get('source')!=old_source):continue
      run(['pactl','move-'+('sink-input' if group=='sinks' else 'source-output'),str(stream['index']),item['name']])
    self.audio=audio_snapshot()
+  elif action=='profile_save':self.profiles.save(m['name'],m['values'])
+  elif action=='profile_apply':
+   self.profiles.apply(m['name'],self.capture_profile,self.apply_profile);self.event={'kind':'profile','name':m['name']}
+  elif action=='profile_restore':self.profiles.restore(self.apply_profile,self.capture_profile);self.event={'kind':'profile','name':''}
+  elif action=='layout_save':self.layouts.save(m['monitor'],m.get('wallpaper',''),m['widgets'])
+  elif action=='layout_reset':self.layouts.reset(m['monitor'],m.get('wallpaper',''))
+  elif action=='brightness':
+   self.brightness=brightness_snapshot()
+   if self.brightness['available']:
+    level=max(1,min(100,self.brightness['value']+max(-5,min(5,int(m['delta'])))))
+    run(['brightnessctl','-c','backlight','set',str(level)+'%']);self.brightness=brightness_snapshot()
+  elif action=='output_mute':run(['pactl','set-sink-mute','@DEFAULT_SINK@','toggle']);self.audio=audio_snapshot()
   elif action=='quick_volume':
    self.audio=audio_snapshot();delta=max(-5,min(5,int(m['delta'])));device=next((x for x in self.audio['sinks'] if x['name']==self.audio['defaultSink']),None)
    if device is None:raise ValueError('device_disappeared')
    level=max(0,min(100,device['volume']+delta));run(['pactl','set-sink-volume','@DEFAULT_SINK@',str(level)+'%']);self.audio=audio_snapshot()
-  elif action=='mic_mute':run(['pactl','set-source-mute','@DEFAULT_SOURCE@','toggle']);self.audio=audio_snapshot()
+  elif action=='mic_mute':
+   self.audio=audio_snapshot();source=self.audio['defaultSource']
+   if not source:raise ValueError('device_disappeared')
+   run(['pactl','set-source-mute',source,'toggle']);self.audio=audio_snapshot()
   elif action in ['focus_window','move_window','workspace']:
    self.desktop=desktop_snapshot()
    if action=='workspace':
@@ -167,9 +236,26 @@ class Session:
     else:
      workspace=int(m['workspace']);assert 1<=workspace<=99;run(['hyprctl','dispatch','movetoworkspacesilent',str(workspace)+',address:'+address])
    self.desktop=desktop_snapshot()
+  elif action=='capture_open_folder':
+   path=self.tools.snapshot()['capture'].get('path','')
+   if path and Path(path).is_file():self.launch_external(['xdg-open',str(Path(path).parent)]);self.event={'kind':'close'}
+  elif action.startswith(('clipboard_','capture_')):
+   if not self.tools.handle(action,m):raise ValueError('unknown_action')
+   if action=='capture_start':self.event={'kind':'close'}
   elif action=='dismiss_error':self.error=''
   else:raise ValueError('unknown_action')
   self.serial+=1
+ def capture_profile(self):
+  self.audio=audio_snapshot();self.brightness=brightness_snapshot()
+  sink=next((x for x in self.audio['sinks'] if x['name']==self.audio['defaultSink']),None)
+  return {'dnd':self.store.data['settings']['dnd'],'volume':sink['volume'] if sink else None,'brightness':self.brightness['value'] if self.brightness['available'] else None,'widgets':dict(clock=True,calendar=True,media=True),'outputName':sink['name'] if sink else '', 'brightnessDevice':self.brightness['device']}
+ def apply_profile(self,values):
+  target=values.get('outputName',self.audio.get('defaultSink'))
+  if values['volume'] is not None and any(s['name']==target for s in self.audio.get('sinks',[])):
+   run(['pactl','set-sink-volume',target,str(values['volume'])+'%'])
+  if values['brightness'] is not None and self.brightness['available'] and values.get('brightnessDevice',self.brightness['device'])==self.brightness['device']:
+   run(['brightnessctl','-c','backlight','set',str(max(1,values['brightness']))+'%'])
+  self.store.setting('dnd',values['dnd']);self.audio=audio_snapshot();self.brightness=brightness_snapshot()
  def poll(self):
   remaining=[]
   for process,log in self.pending:
@@ -178,14 +264,24 @@ class Session:
    if code!=0:log.seek(0);self.error=log.read(350).strip() or 'launch_failed';self.serial+=1
    log.close()
   self.pending=remaining
-  self.audio=audio_snapshot();self.desktop=desktop_snapshot()
+  self.audio=audio_snapshot();self.desktop=desktop_snapshot();self.brightness=brightness_snapshot()
+  if time.monotonic()>=getattr(self,'prune_at',0):
+   self.store.prune_notifications();self.prune_at=time.monotonic()+60
+  try:self.timer_sound.poll()
+  except (OSError,RuntimeError) as error:self.error=str(error)[:350];self.serial+=1
   if self.store.timer_tick():
    self.event={'kind':'timer_finished'};self.serial+=1
-   try:self.launch(['paplay','--client-name=Event Horizon','--stream-name=Timer',str(BASE/'sounds/timer.wav')])
-   except OSError as error:self.error=str(error)[:350]
+   try:self.timer_sound.start(self.store.data['settings'])
+   except (OSError,RuntimeError) as error:self.error=str(error)[:350]
 
 def main():
- session=Session();last=0;pending=b''
+ session=Session()
+ try:serve(session)
+ finally:
+  session.timer_sound.stop();session.tools.close()
+
+def serve(session):
+ last=0;pending=b''
  while True:
   if select.select([sys.stdin],[],[],.2)[0]:
    chunk=os.read(sys.stdin.fileno(),65536)

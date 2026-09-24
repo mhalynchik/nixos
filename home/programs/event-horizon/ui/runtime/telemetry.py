@@ -1,5 +1,7 @@
 import json, math, os, time
 from pathlib import Path
+from gpu import GpuTelemetry
+gpus=GpuTelemetry()
 previous=None
 history=[]
 def read():
@@ -43,7 +45,8 @@ def read():
         radius=min(1,depths[n]/max(1,max(depths.values())))**.55
         graph.append(dict(p,x=math.cos(angle)*radius,y=math.sin(angle)*radius,depth=depths[n]))
     history=(history+[round(percent,1)])[-40:]
-    return {'cpu':round(percent,1),'ram':round((mem['MemTotal']-mem['MemAvailable'])/1048576,2),'ramTotal':round(mem['MemTotal']/1048576,2),'ramPercent':round(100*(1-mem['MemAvailable']/mem['MemTotal'])),'processCount':len(processes),'top':top,'graph':graph,'history':history,'uptime':int(float(Path('/proc/uptime').read_text().split()[0]))}
-while True:
-    print(json.dumps(read()),flush=True)
-    time.sleep(2)
+    return {'gpus':gpus.read(),'cpu':round(percent,1),'ram':round((mem['MemTotal']-mem['MemAvailable'])/1048576,2),'ramTotal':round(mem['MemTotal']/1048576,2),'ramPercent':round(100*(1-mem['MemAvailable']/mem['MemTotal'])),'processCount':len(processes),'top':top,'graph':graph,'history':history,'uptime':int(float(Path('/proc/uptime').read_text().split()[0]))}
+if __name__ == '__main__':
+    while True:
+        print(json.dumps(read()),flush=True)
+        time.sleep(2)
